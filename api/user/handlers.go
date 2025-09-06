@@ -1,7 +1,6 @@
 package user
 
 import (
-	"go/types"
 	"net/http"
 	"strconv"
 	"strings"
@@ -9,9 +8,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/intraware/rodan-authify/api/shared"
 	"github.com/intraware/rodan-authify/internal/models"
+	"github.com/intraware/rodan-authify/internal/types"
 	"github.com/intraware/rodan-authify/internal/utils"
 	"github.com/sirupsen/logrus"
-	"github.com/skip2/go-qrcode"
 	"gorm.io/gorm"
 )
 
@@ -20,10 +19,7 @@ func getMyProfile(ctx *gin.Context) {
 	userID := ctx.GetInt("user_id")
 	var user models.User
 	cacheHit := false
-	if val, ok := shared.UserCache.Get(userID); ok {
-		user = val
-		cacheHit = true
-	} else {
+	if user, cacheHit := shared.UserCache.Get(userID); !cacheHit {
 		if err := models.DB.First(&user, userID).Error; err != nil {
 			auditLog.WithFields(logrus.Fields{
 				"event":   "get_my_profile",
@@ -39,11 +35,11 @@ func getMyProfile(ctx *gin.Context) {
 		}
 	}
 	userInfo := userInfo{
-		ID:             user.ID,
-		Username:       user.Username,
-		Email:          user.Email,
-		GitHubUsername: user.GitHubUsername,
-		TeamID:         user.TeamID,
+		ID:        user.ID,
+		Username:  user.Username,
+		Email:     user.Email,
+		AvatarURL: user.AvatarURL,
+		TeamID:    user.TeamID,
 	}
 	auditLog.WithFields(logrus.Fields{
 		"event":    "get_my_profile",
@@ -73,10 +69,7 @@ func getUserProfile(ctx *gin.Context) {
 	}
 	var user models.User
 	cacheHit := false
-	if val, ok := shared.UserCache.Get(userID); ok {
-		user = val
-		cacheHit = true
-	} else {
+	if user, cacheHit := shared.UserCache.Get(userID); !cacheHit {
 		if err := models.DB.First(&user, userID).Error; err != nil {
 			if err == gorm.ErrRecordNotFound {
 				auditLog.WithFields(logrus.Fields{
@@ -104,10 +97,10 @@ func getUserProfile(ctx *gin.Context) {
 		}
 	}
 	userInfo := userInfo{
-		ID:             user.ID,
-		Username:       user.Username,
-		GitHubUsername: user.GitHubUsername,
-		TeamID:         user.TeamID,
+		ID:        user.ID,
+		Username:  user.Username,
+		AvatarURL: user.AvatarURL,
+		TeamID:    user.TeamID,
 	}
 	auditLog.WithFields(logrus.Fields{
 		"event":    "get_user_profile",
@@ -137,10 +130,7 @@ func updateProfile(ctx *gin.Context) {
 	}
 	var user models.User
 	cacheHit := false
-	if val, ok := shared.UserCache.Get(userID); ok {
-		user = val
-		cacheHit = true
-	} else {
+	if user, cacheHit := shared.UserCache.Get(userID); !cacheHit {
 		if err := models.DB.First(&user, userID).Error; err != nil {
 			auditLog.WithFields(logrus.Fields{
 				"event":   "update_profile",
@@ -154,12 +144,12 @@ func updateProfile(ctx *gin.Context) {
 		}
 	}
 	oldUsername := user.Username
-	oldGitHub := user.GitHubUsername
+	oldAvatarURL := user.AvatarURL
 	if input.Username != nil {
 		user.Username = *input.Username
 	}
-	if input.GitHubUsername != nil {
-		user.GitHubUsername = *input.GitHubUsername
+	if input.AvatarURL != nil {
+		user.AvatarURL = *input.AvatarURL
 	}
 	if err := models.DB.Save(&user).Error; err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") || strings.Contains(err.Error(), "duplicate") {
@@ -170,13 +160,13 @@ func updateProfile(ctx *gin.Context) {
 				"user_id":      user.ID,
 				"old_username": oldUsername,
 				"new_username": user.Username,
-				"old_github":   oldGitHub,
-				"new_github":   user.GitHubUsername,
+				"old_avatar":   oldAvatarURL,
+				"new_avatar":   user.AvatarURL,
 				"ip":           ctx.ClientIP(),
 				"cache":        cacheHit,
 				"error":        err.Error(),
-			}).Warn("Username or GitHub username already in use in updateProfile")
-			ctx.JSON(http.StatusConflict, types.ErrorResponse{Error: "Username or GitHub username already in use"})
+			}).Warn("Username or AvatarURL already in use in updateProfile")
+			ctx.JSON(http.StatusConflict, types.ErrorResponse{Error: "Username or AvatarURL already in use"})
 			return
 		}
 		auditLog.WithFields(logrus.Fields{
@@ -197,8 +187,8 @@ func updateProfile(ctx *gin.Context) {
 		"user_id":      user.ID,
 		"old_username": oldUsername,
 		"new_username": user.Username,
-		"old_github":   oldGitHub,
-		"new_github":   user.GitHubUsername,
+		"old_avatar":   oldAvatarURL,
+		"new_avatar":   user.AvatarURL,
 		"ip":           ctx.ClientIP(),
 		"cache":        cacheHit,
 	}).Info("Profile updated successfully")
@@ -240,86 +230,4 @@ func deleteProfile(ctx *gin.Context) {
 		"ip":      ctx.ClientIP(),
 	}).Info("User deleted successfully")
 	ctx.JSON(http.StatusOK, types.SuccessResponse{Message: "User deleted successfully"})
-}
-
-func profileTOTP(ctx *gin.Context) {
-	auditLog := utils.Logger.WithField("type", "audit")
-	userID := ctx.GetInt("user_id")
-	var user models.User
-	cacheHit := false
-	if val, ok := shared.UserCache.Get(userID); ok {
-		user = val
-		cacheHit = true
-	} else {
-		if err := models.DB.First(&user, userID).Error; err != nil {
-			auditLog.WithFields(logrus.Fields{
-				"event":   "profile_totp",
-				"status":  "failure",
-				"reason":  "db_error",
-				"user_id": userID,
-				"ip":      ctx.ClientIP(),
-				"error":   err.Error(),
-			}).Error("Failed to fetch user in profileTOTP")
-			ctx.JSON(http.StatusInternalServerError, types.ErrorResponse{Error: "Failed to fetch user"})
-			return
-		}
-		shared.UserCache.Set(userID, user)
-	}
-	totpURL, _ := user.TOTPUrl()
-	png, err := qrcode.Encode(totpURL, qrcode.Medium, 256)
-	if err != nil {
-		auditLog.WithFields(logrus.Fields{
-			"event":   "profile_totp",
-			"status":  "failure",
-			"reason":  "qrcode_generation_failed",
-			"user_id": userID,
-			"ip":      ctx.ClientIP(),
-			"error":   err.Error(),
-		}).Error("Failed to generate QR code in profileTOTP")
-		ctx.JSON(http.StatusInternalServerError, types.ErrorResponse{Error: "Failed to generate QR code"})
-		return
-	}
-	auditLog.WithFields(logrus.Fields{
-		"event":   "profile_totp",
-		"status":  "success",
-		"user_id": userID,
-		"ip":      ctx.ClientIP(),
-		"cache":   cacheHit,
-	}).Info("TOTP QR code generated for profile")
-	ctx.Header("Content-Type", "image/png")
-	ctx.Writer.Write(png)
-}
-
-func profileBackupCode(ctx *gin.Context) {
-	auditLog := utils.Logger.WithField("type", "audit")
-	userID := ctx.GetInt("user_id")
-	var user models.User
-	cacheHit := false
-	if val, ok := shared.UserCache.Get(userID); ok {
-		user = val
-		cacheHit = true
-	} else {
-		if err := models.DB.First(&user, userID).Error; err != nil {
-			auditLog.WithFields(logrus.Fields{
-				"event":   "profile_backup_code",
-				"status":  "failure",
-				"reason":  "db_error",
-				"user_id": userID,
-				"ip":      ctx.ClientIP(),
-				"error":   err.Error(),
-			}).Error("Failed to fetch user in profileBackupCode")
-			ctx.JSON(http.StatusInternalServerError, types.ErrorResponse{Error: "Failed to fetch user"})
-			return
-		}
-		shared.UserCache.Set(userID, user)
-	}
-	auditLog.WithFields(logrus.Fields{
-		"event":       "profile_backup_code",
-		"status":      "success",
-		"user_id":     userID,
-		"ip":          ctx.ClientIP(),
-		"cache":       cacheHit,
-		"backup_code": user.BackupCode,
-	}).Info("Fetched backup code for profile")
-	ctx.JSON(http.StatusOK, gin.H{"backup_code": user.BackupCode})
 }

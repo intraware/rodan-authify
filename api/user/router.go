@@ -19,8 +19,10 @@ func LoadUser(r *gin.RouterGroup) {
 	}
 	userRouter.GET("/:id", middleware.CacheMiddleware, getUserProfile)
 	if values.GetConfig().App.OAuth.Enabled {
-		userRouter.GET("/providers", listOAuthProviders)
-		protectedRouter.GET("/oauth", getUserOAuth)       // e.g. { provider: "github", username: "octocat" }
-		protectedRouter.DELETE("/oauth", unlinkUserOAuth) // unlink OAuth (fallback to password if supported)
+		userRouter.GET("/providers", middleware.CacheMiddleware, listOAuthProviders)
+		protectedRouter.GET("/oauth", middleware.CacheMiddleware, getUserOAuth)
+		if values.GetConfig().App.OAuth.AllowUnlink {
+			protectedRouter.DELETE("/oauth", unlinkUserOAuth)
+		}
 	}
 }

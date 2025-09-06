@@ -42,6 +42,7 @@ type AppConfig struct {
 	AllowLeavingTeam  bool           `mapstructure:"allow-leave-team"`
 	AllowOutsideEmail bool           `mapstructure:"allow-outside-email"`
 	EmailsCSV         string         `mapstructure:"emails-csv"`
+	CacheDuration     time.Duration  `mapstructure:"frontend-cache-duration"`
 
 	Email    EmailConfig `mapstructure:"email" reload:"true"`
 	OAuth    OAuthConfig `mapstructure:"oauth" reload:"true"`
@@ -74,6 +75,7 @@ type EmailProviderConfig struct {
 type OAuthConfig struct {
 	Enabled     bool                           `mapstructure:"enabled"`
 	RedirectURL string                         `mapstructure:"redirect_url" reload:"true"`
+	AllowUnlink bool                           `mapstructure:"allow-unlink"`
 	Providers   map[string]OAuthProviderConfig `mapstructure:"providers" reload:"true"`
 }
 

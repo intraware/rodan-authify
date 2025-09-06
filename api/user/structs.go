@@ -1,14 +1,18 @@
 package user
 
 type userInfo struct {
-	ID             int    `json:"id" example:"42"`
-	Username       string `json:"username" example:"intraware"`
-	Email          string `json:"email" example:"example@intraware.org"`
-	GitHubUsername string `json:"github_username" example:"intraware"`
-	TeamID         *int   `json:"team_id" example:"1"`
+	ID        int    `json:"id" example:"42"`
+	Username  string `json:"username" example:"intraware"`
+	Email     string `json:"email" example:"example@intraware.org"`
+	AvatarURL string `json:"avatar_url,omitempty" example:"https://.."`
+	TeamID    *int   `json:"team_id" example:"1"`
 }
 
 type updateUserRequest struct {
-	Username       *string `json:"username"`
-	GitHubUsername *string `json:"github_username"`
+	Username  *string `json:"username"`
+	AvatarURL *string `json:"avatar_url"`
+}
+
+type providersList struct {
+	Providers []string `json:"providers" example:"[google,github,microsoft]"`
 }

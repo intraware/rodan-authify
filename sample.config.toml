@@ -23,6 +23,7 @@ email-regex = "^[\w._%+-]+@[\w.-]+\.[a-zA-Z]{2,}$"
 allow-leave-team = false
 allow-outside-email = true
 emails-csv = "./users-list.csv"
+frontend-cache-duration = "10m"
 
 [app.email]
 enabled = false
@@ -45,6 +46,7 @@ password = "your-password"
 [app.oauth]
 enabled = false
 redirect_url = "http://127.0.0.1:8080/oauth/callback"
+allow-unlink = false
 
 # You can list multiple providers
 [app.oauth.providers.google]
