@@ -27,4 +27,10 @@ var LoginCache = cache.NewCache[string, models.User](&cache.CacheOpts{
 
 var ResetPasswordCache cache.Cache[string, models.User]
 
+var BanHistoryCache = cache.NewCache[string, models.BanHistory](&cache.CacheOpts{
+	TimeToLive:    10 * time.Minute,
+	CleanInterval: ptr(time.Hour * 2),
+	Revaluate:     ptr(true),
+})
+
 func ptr[T any](v T) *T { return &v }

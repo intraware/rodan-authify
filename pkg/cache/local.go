@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/intraware/rodan/pkg/go-tinylfu"
+	"github.com/intraware/rodan-authify/pkg/go-tinylfu"
 )
 
 type LocalCache interface {

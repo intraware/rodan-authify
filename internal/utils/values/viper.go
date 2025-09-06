@@ -7,7 +7,7 @@ import (
 	"regexp"
 
 	"github.com/fsnotify/fsnotify"
-	"github.com/intraware/rodan/internal/config"
+	"github.com/intraware/rodan-authify/internal/config"
 	"github.com/spf13/viper"
 )
 

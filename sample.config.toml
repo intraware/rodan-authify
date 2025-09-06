@@ -1,0 +1,85 @@
+[server]
+host = "0.0.0.0"
+port = 8080
+production = false
+cors-url = ["*"]
+
+[server.security]
+jwt-secret = "supersecretjwtkey"
+
+[database]
+host = "localhost"
+port = 5432
+username = "dbuser"
+password = "dbpassword"
+database-name = "myapp"
+ssl-mode = "disable"
+max-tries = 5
+
+[app]
+token-expiry = "15m"
+team-size = 3
+email-regex = "^[\w._%+-]+@[\w.-]+\.[a-zA-Z]{2,}$"
+allow-leave-team = false
+allow-outside-email = true
+emails-csv = "./users-list.csv"
+
+[app.email]
+enabled = false
+agent-email = "no-reply@example.com"
+allowed-email-regex = "^[a-zA-Z0-9._%+-]+@example\\.com$"
+
+[app.email.provider]
+type = "smtp"
+host = "smtp.example.com"
+port = 587
+username = "your_username"
+password = "your-password"
+
+# [app.email.provider]
+# type = "microsoft-graph"
+# tenant-id = "your_tenant_id"
+# client_id = "your_client_id"
+# client_secret = "your_client_secret"
+
+[app.oauth]
+enabled = false
+redirect_url = "http://127.0.0.1:8080/oauth/callback"
+
+# You can list multiple providers
+[app.oauth.providers.google]
+client_id     = "your-google-client-id"
+client_secret = "your-google-client-secret"
+scopes        = ["openid", "email", "profile"]
+auth_url      = "https://accounts.google.com/o/oauth2/auth"
+token_url     = "https://oauth2.googleapis.com/token"
+userinfo_url  = "https://www.googleapis.com/oauth2/v3/userinfo"
+
+# [app.oauth.providers.github]
+# client_id     = "your-github-client-id"
+# client_secret = "your-github-client-secret"
+# scopes        = ["read:user", "user:email"]
+# auth_url      = "https://github.com/login/oauth/authorize"
+# token_url     = "https://github.com/login/oauth/access_token"
+# userinfo_url  = "https://api.github.com/user"
+
+[app.totp]
+enabled     = true
+issuer      = "intraware"
+digits      = 6
+period      = 30
+algorithm   = "SHA1"
+
+[app.ban]
+enable-user-ban = true
+enable-team-ban = false
+initial-ban-duration = "1h"
+ban-growth-factor = 2.0
+max-ban-duration = "24h"
+
+[app.cache]
+in-app = true
+service-url = "redis://cache-service:6379"
+service-type = "redis"
+internal-cache-size = 1000
+internal-cache-duration = "10m"

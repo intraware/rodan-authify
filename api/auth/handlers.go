@@ -397,7 +397,7 @@ func forgotPassword(ctx *gin.Context) {
 // @Produce      json
 // @Param        token    path      string               true  "Reset token"
 // @Param        request  body      resetPasswordRequest true  "New password data"
-// @Success      200      {object}  successResponse
+// @Success      200      {object}  types.SuccessResponse
 // @Failure      400      {object}  types.ErrorResponse
 // @Failure      401      {object}  types.ErrorResponse
 // @Failure      500      {object}  types.ErrorResponse

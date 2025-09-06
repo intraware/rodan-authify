@@ -1,0 +1,254 @@
+definitions:
+  auth.authResponse:
+    properties:
+      token:
+        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        type: string
+      user:
+        $ref: '#/definitions/auth.userInfo'
+    type: object
+  auth.forgotPasswordRequest:
+    properties:
+      backup_code:
+        example: "123456789012"
+        type: string
+      otp:
+        example: "11223344"
+        type: string
+      username:
+        example: intraware
+        type: string
+    required:
+    - username
+    type: object
+  auth.loginRequest:
+    properties:
+      password:
+        example: mystrongpassword
+        type: string
+      username:
+        example: intraware
+        type: string
+    required:
+    - password
+    - username
+    type: object
+  auth.resetPasswordRequest:
+    properties:
+      password:
+        example: MyNewStrongPassword
+        minLength: 8
+        type: string
+    required:
+    - password
+    type: object
+  auth.resetTokenResponse:
+    properties:
+      reset_token:
+        example: abc123def456...
+        type: string
+    type: object
+  auth.signUpRequest:
+    properties:
+      email:
+        example: example@intraware.org
+        type: string
+      github_username:
+        example: intraware
+        type: string
+      password:
+        example: mystrongpassword
+        minLength: 8
+        type: string
+      username:
+        example: intraware
+        type: string
+    required:
+    - email
+    - github_username
+    - password
+    - username
+    type: object
+  auth.userInfo:
+    properties:
+      email:
+        example: example@intraware.org
+        type: string
+      github_username:
+        example: intraware
+        type: string
+      id:
+        example: 42
+        type: integer
+      team_id:
+        example: 1
+        type: integer
+      username:
+        example: intraware
+        type: string
+    type: object
+  types.ErrorResponse:
+    properties:
+      error:
+        example: Something went wrong
+        type: string
+    type: object
+  types.SuccessResponse:
+    properties:
+      message:
+        example: Something went right
+        type: string
+    type: object
+info:
+  contact: {}
+paths:
+  /auth/forgot-password:
+    post:
+      consumes:
+      - application/json
+      description: Initiates password reset process using OTP or backup code
+      parameters:
+      - description: Forgot password request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.forgotPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/auth.resetTokenResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/types.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/types.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/types.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/types.ErrorResponse'
+      summary: Forgot password
+      tags:
+      - auth
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticates a user and returns an access token
+      parameters:
+      - description: Login credentials
+        in: body
+        name: credentials
+        required: true
+        schema:
+          $ref: '#/definitions/auth.loginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/auth.authResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/types.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/types.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/types.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/types.ErrorResponse'
+      summary: User login
+      tags:
+      - auth
+  /auth/reset-password/{token}:
+    post:
+      consumes:
+      - application/json
+      description: Resets user password using a valid reset token
+      parameters:
+      - description: Reset token
+        in: path
+        name: token
+        required: true
+        type: string
+      - description: New password data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.resetPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/types.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/types.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/types.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/types.ErrorResponse'
+      summary: Reset password
+      tags:
+      - auth
+  /auth/signup:
+    post:
+      consumes:
+      - application/json
+      description: Registers a new user account in the system
+      parameters:
+      - description: User registration data
+        in: body
+        name: user
+        required: true
+        schema:
+          $ref: '#/definitions/auth.signUpRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/auth.authResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/types.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/types.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/types.ErrorResponse'
+      summary: Sign up new user
+      tags:
+      - auth
+swagger: "2.0"

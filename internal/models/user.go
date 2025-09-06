@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/intraware/rodan/internal/utils/values"
+	"github.com/intraware/rodan-authify/internal/utils/values"
 	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
 	"golang.org/x/crypto/argon2"
@@ -26,17 +26,32 @@ const (
 
 type User struct {
 	gorm.Model
-	ID             int    `json:"id" gorm:"primaryKey"`
-	Username       string `json:"username" gorm:"unique"`
-	Password       string `json:"password"`
-	Email          string `json:"email" gorm:"unique"`
-	GitHubUsername string `json:"github_username" gorm:"column:github_username;unique"`
-	Ban            bool   `json:"ban" gorm:"default:false"`
-	Blacklist      bool   `json:"blacklist" gorm:"default:false"`
-	BackupCode     string `gorm:"unique"`
-	TOTPSecret     string `gorm:"unique"`
-	TeamID         *int   `json:"team_id" gorm:"column:team_id"`
-	Team           *Team  `json:"team" gorm:"foreignKey:TeamID"`
+	ID        int    `json:"id" gorm:"primaryKey"`
+	Username  string `json:"username" gorm:"unique"`
+	Password  string `json:"-"`
+	Email     string `json:"email" gorm:"unique"`
+	AvatarURL string `json:"avatar_url" gorm:"column:avatar_url;unique"`
+	Active    bool   `json:"active" gorm:"default:false"`
+	Ban       bool   `json:"ban" gorm:"default:false"`
+	Blacklist bool   `json:"blacklist" gorm:"default:false"`
+	TeamID    *int   `json:"team_id" gorm:"column:team_id"`
+	Team      *Team  `json:"team" gorm:"foreignKey:TeamID"`
+}
+
+type UserOauthMeta struct {
+	gorm.Model
+	UserID       int    `gorm:"not null;index"`
+	Provider     string `gorm:"not null"`
+	ProviderID   string `gorm:"not null;unique"`
+	AccessToken  string `gorm:"type:text"`
+	RefreshToken string `gorm:"type:text"`
+	Expiry       time.Time
+}
+
+type UserTOTPMeta struct {
+	gorm.Model
+	BackupCode string `gorm:"unique"`
+	TOTPSecret string `gorm:"unique"`
 }
 
 func (User) TableName() string {

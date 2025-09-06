@@ -11,7 +11,7 @@ func LoadRoutes(r *gin.Engine) {
 	apiRouter := r.Group("/api")
 
 	auth.LoadAuth(apiRouter)
-	shared.Init(values.GetConfig().AppConfig)
+	shared.Init(&values.GetConfig().App)
 	apiRouter.GET("/ping", func(ctx *gin.Context) {
 		ctx.JSON(200, gin.H{"msg": "pong"})
 	})
