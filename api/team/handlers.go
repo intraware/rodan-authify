@@ -29,9 +29,8 @@ func createTeam(ctx *gin.Context) {
 	}
 	userID := ctx.GetInt("user_id")
 	var user models.User
-	if val, ok := shared.UserCache.Get(userID); ok {
-		user = val
-	} else {
+	cacheHit := false
+	if user, cacheHit := shared.UserCache.Get(userID); !cacheHit {
 		if err := models.DB.First(&user, userID).Error; err != nil {
 			auditLog.WithFields(logrus.Fields{
 				"event":   "create_team",
@@ -46,12 +45,13 @@ func createTeam(ctx *gin.Context) {
 	}
 	if user.TeamID != nil {
 		auditLog.WithFields(logrus.Fields{
-			"event":    "create_team",
-			"status":   "failure",
-			"reason":   "user_already_in_team",
-			"user_id":  user.ID,
-			"username": user.Username,
-			"ip":       ctx.ClientIP(),
+			"event":     "create_team",
+			"status":    "failure",
+			"reason":    "user_already_in_team",
+			"cache_hit": cacheHit,
+			"user_id":   user.ID,
+			"username":  user.Username,
+			"ip":        ctx.ClientIP(),
 		}).Warn("User already in a team")
 		ctx.JSON(http.StatusBadRequest, types.ErrorResponse{Error: "User is already in a team"})
 		return
@@ -62,12 +62,13 @@ func createTeam(ctx *gin.Context) {
 	}
 	if err := models.DB.Create(&team).Error; err != nil {
 		auditLog.WithFields(logrus.Fields{
-			"event":    "create_team",
-			"status":   "failure",
-			"reason":   "db_team_create_failed",
-			"user_id":  user.ID,
-			"username": user.Username,
-			"ip":       ctx.ClientIP(),
+			"event":     "create_team",
+			"status":    "failure",
+			"reason":    "db_team_create_failed",
+			"cache_hit": cacheHit,
+			"user_id":   user.ID,
+			"username":  user.Username,
+			"ip":        ctx.ClientIP(),
 		}).Error("Failed to create team")
 		ctx.JSON(http.StatusInternalServerError, types.ErrorResponse{Error: "Failed to create team"})
 		return
@@ -76,13 +77,14 @@ func createTeam(ctx *gin.Context) {
 	if err := models.DB.Save(&user).Error; err != nil {
 		_ = models.DB.Delete(&team) // rollback team
 		auditLog.WithFields(logrus.Fields{
-			"event":    "create_team",
-			"status":   "failure",
-			"reason":   "user_save_failed",
-			"user_id":  user.ID,
-			"username": user.Username,
-			"team_id":  team.ID,
-			"ip":       ctx.ClientIP(),
+			"event":     "create_team",
+			"status":    "failure",
+			"reason":    "user_save_failed",
+			"cache_hit": cacheHit,
+			"user_id":   user.ID,
+			"username":  user.Username,
+			"team_id":   team.ID,
+			"ip":        ctx.ClientIP(),
 		}).Error("Failed to associate user with team after creation")
 		ctx.JSON(http.StatusInternalServerError, types.ErrorResponse{Error: "Failed to add user to team"})
 		return
@@ -92,13 +94,14 @@ func createTeam(ctx *gin.Context) {
 	var teamResponse models.Team
 	if err := models.DB.First(&teamResponse, team.ID).Error; err != nil {
 		auditLog.WithFields(logrus.Fields{
-			"event":    "create_team",
-			"status":   "failure",
-			"reason":   "team_reload_failed",
-			"user_id":  user.ID,
-			"username": user.Username,
-			"team_id":  team.ID,
-			"ip":       ctx.ClientIP(),
+			"event":     "create_team",
+			"status":    "failure",
+			"reason":    "team_reload_failed",
+			"cache_hit": cacheHit,
+			"user_id":   user.ID,
+			"username":  user.Username,
+			"team_id":   team.ID,
+			"ip":        ctx.ClientIP(),
 		}).Error("Failed to reload created team")
 		ctx.JSON(http.StatusInternalServerError, types.ErrorResponse{Error: "Failed to load team"})
 		return
@@ -107,6 +110,7 @@ func createTeam(ctx *gin.Context) {
 	auditLog.WithFields(logrus.Fields{
 		"event":     "create_team",
 		"status":    "success",
+		"cache_hit": cacheHit,
 		"user_id":   user.ID,
 		"username":  user.Username,
 		"team_id":   team.ID,
@@ -144,9 +148,7 @@ func joinTeam(ctx *gin.Context) {
 	}
 	userID := ctx.GetInt("user_id")
 	var user models.User
-	if val, ok := shared.UserCache.Get(userID); ok {
-		user = val
-	} else {
+	if user, cacheHit := shared.UserCache.Get(userID); !cacheHit {
 		if err := models.DB.First(&user, userID).Error; err != nil {
 			auditLog.WithFields(logrus.Fields{
 				"event":   "join_team",
@@ -173,9 +175,7 @@ func joinTeam(ctx *gin.Context) {
 		return
 	}
 	var team models.Team
-	if val, ok := shared.TeamCache.Get(teamID); ok {
-		team = val
-	}
+	team, _ = shared.TeamCache.Get(teamID)
 	if err := models.DB.Where("id = ?", teamID).First(&team).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			auditLog.WithFields(logrus.Fields{
@@ -275,10 +275,7 @@ func getMyTeam(ctx *gin.Context) {
 	userID := ctx.GetInt("user_id")
 	var user models.User
 	cacheHit := false
-	if val, ok := shared.UserCache.Get(userID); ok {
-		user = val
-		cacheHit = true
-	} else {
+	if user, cacheHit := shared.UserCache.Get(userID); !cacheHit {
 		if err := models.DB.First(&user, userID).Error; err != nil {
 			auditLog.WithFields(logrus.Fields{
 				"event":   "get_my_team",
@@ -305,10 +302,7 @@ func getMyTeam(ctx *gin.Context) {
 	}
 	var team models.Team
 	teamCacheHit := false
-	if val, ok := shared.TeamCache.Get(*user.TeamID); ok {
-		team = val
-		teamCacheHit = true
-	} else {
+	if team, teamCachehit := shared.TeamCache.Get(*user.TeamID); !teamCachehit {
 		if err := models.DB.Preload("Members").First(&team, *user.TeamID).Error; err != nil {
 			auditLog.WithFields(logrus.Fields{
 				"event":   "get_my_team",
@@ -352,10 +346,7 @@ func getTeam(ctx *gin.Context) {
 	}
 	var team models.Team
 	cacheHit := false
-	if val, ok := shared.TeamCache.Get(teamID); ok {
-		team = val
-		cacheHit = true
-	} else {
+	if team, cacheHit := shared.TeamCache.Get(teamID); !cacheHit {
 		if err := models.DB.Preload("Members").First(&team, teamID).Error; err != nil {
 			if err == gorm.ErrRecordNotFound {
 				auditLog.WithFields(logrus.Fields{
@@ -412,11 +403,11 @@ func buildTeamResponse(team models.Team) teamResponse {
 	members := make([]userInfo, len(team.Members))
 	for i, member := range team.Members {
 		members[i] = userInfo{
-			ID:             member.ID,
-			Username:       member.Username,
-			Email:          member.Email,
-			GitHubUsername: member.GitHubUsername,
-			TeamID:         member.TeamID,
+			ID:        member.ID,
+			Username:  member.Username,
+			Email:     member.Email,
+			AvatarURL: member.AvatarURL,
+			TeamID:    member.TeamID,
 		}
 	}
 	return teamResponse{
@@ -443,9 +434,7 @@ func editTeam(ctx *gin.Context) {
 	}
 	userID := ctx.GetInt("user_id")
 	var user models.User
-	if val, ok := shared.UserCache.Get(userID); ok {
-		user = val
-	} else {
+	if user, ok := shared.UserCache.Get(userID); !ok {
 		if err := models.DB.First(&user, userID).Error; err != nil {
 			auditLog.WithFields(logrus.Fields{
 				"event":   "edit_team",
@@ -472,10 +461,7 @@ func editTeam(ctx *gin.Context) {
 	}
 	var team models.Team
 	cacheHit := false
-	if val, ok := shared.TeamCache.Get(*user.TeamID); ok {
-		team = val
-		cacheHit = true
-	} else {
+	if team, cacheHit := shared.TeamCache.Get(*user.TeamID); !cacheHit {
 		if err := models.DB.Preload("Members").First(&team, *user.TeamID).Error; err != nil {
 			auditLog.WithFields(logrus.Fields{
 				"event":   "edit_team",
@@ -556,9 +542,7 @@ func deleteTeam(ctx *gin.Context) {
 	auditLog := utils.Logger.WithField("type", "audit")
 	userID := ctx.GetInt("user_id")
 	var user models.User
-	if val, ok := shared.UserCache.Get(userID); ok {
-		user = val
-	} else {
+	if user, ok := shared.UserCache.Get(userID); !ok {
 		if err := models.DB.First(&user, userID).Error; err != nil {
 			auditLog.WithFields(logrus.Fields{
 				"event":   "delete_team",
@@ -585,10 +569,7 @@ func deleteTeam(ctx *gin.Context) {
 	}
 	var team models.Team
 	cacheHit := false
-	if val, ok := shared.TeamCache.Get(*user.TeamID); ok {
-		team = val
-		cacheHit = true
-	} else {
+	if team, cacheHit := shared.TeamCache.Get(*user.TeamID); !cacheHit {
 		if err := models.DB.Preload("Members").First(&team, *user.TeamID).Error; err != nil {
 			auditLog.WithFields(logrus.Fields{
 				"event":   "delete_team",
@@ -646,9 +627,7 @@ func leaveTeam(ctx *gin.Context) {
 	auditLog := utils.Logger.WithField("type", "audit")
 	userID := ctx.GetInt("user_id")
 	var user models.User
-	if val, ok := shared.UserCache.Get(userID); ok {
-		user = val
-	} else {
+	if user, ok := shared.UserCache.Get(userID); !ok {
 		if err := models.DB.First(&user, userID).Error; err != nil {
 			auditLog.WithFields(logrus.Fields{
 				"event":   "leave_team",
@@ -675,10 +654,7 @@ func leaveTeam(ctx *gin.Context) {
 	}
 	var team models.Team
 	cacheHit := false
-	if val, ok := shared.TeamCache.Get(*user.TeamID); ok {
-		team = val
-		cacheHit = true
-	} else {
+	if team, cacheHit := shared.TeamCache.Get(*user.TeamID); !cacheHit {
 		if err := models.DB.Preload("Members").First(&team, *user.TeamID).Error; err != nil {
 			auditLog.WithFields(logrus.Fields{
 				"event":   "leave_team",
