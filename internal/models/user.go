@@ -26,7 +26,6 @@ const (
 
 type User struct {
 	gorm.Model
-	ID        int    `json:"id" gorm:"primaryKey"`
 	Username  string `json:"username" gorm:"unique"`
 	Password  string `json:"-"`
 	Email     string `json:"email" gorm:"unique"`
@@ -34,33 +33,46 @@ type User struct {
 	Active    bool   `json:"active" gorm:"default:false"`
 	Ban       bool   `json:"ban" gorm:"default:false"`
 	Blacklist bool   `json:"blacklist" gorm:"default:false"`
-	TeamID    *int   `json:"team_id" gorm:"column:team_id"`
+	TeamID    *uint  `json:"team_id" gorm:"column:team_id"`
 	Team      *Team  `json:"team" gorm:"foreignKey:TeamID"`
 }
 
 type UserOauthMeta struct {
 	gorm.Model
-	UserID       int    `gorm:"not null;index"`
+	UserID       int    `gorm:"column:user_id;not null;index"`
 	Provider     string `gorm:"not null"`
 	ProviderID   string `gorm:"not null;unique"`
 	AccessToken  string `gorm:"type:text"`
 	RefreshToken string `gorm:"type:text"`
 	Expiry       time.Time
+
+	User *User `gorm:"foreignKey:UserID"`
 }
 
 type UserTOTPMeta struct {
 	gorm.Model
-	BackupCode string `gorm:"unique"`
-	TOTPSecret string `gorm:"unique"`
+	BackupCode string `gorm:"unique" json:"backup_code"`
+	TOTPSecret string `gorm:"unique" json:"totp_secret"`
+	UserID     int    `gorm:"column:user_id;not null;index" json:"user_id"`
+
+	User *User `gorm:"foreignKey:UserID"`
 }
 
 func (User) TableName() string {
 	return "users"
 }
 
+func (UserTOTPMeta) TableName() string {
+	return "user_totp_meta"
+}
+
+func (UserOauthMeta) TableName() string {
+	return "user_oauth_meta"
+}
+
 func generateResetCode(length int) (string, error) {
 	code := ""
-	for i := 0; i < length; i++ {
+	for range length {
 		n, err := rand.Int(rand.Reader, big.NewInt(10))
 		if err != nil {
 			return "", err
@@ -70,26 +82,29 @@ func generateResetCode(length int) (string, error) {
 	return code, nil
 }
 
-func (u *User) BeforeCreate(tx *gorm.DB) (err error) {
-	err = u.SetPassword(u.Password)
-	if err != nil {
-		return
-	}
+func (ut *UserTOTPMeta) BeforeCreate(tx *gorm.DB) (err error) {
 	if code, err := generateResetCode(12); err != nil {
 		return err
 	} else {
-		u.BackupCode = code
+		ut.BackupCode = code
 	}
-	u.CreatedAt = time.Now()
 	if key, err := totp.Generate(totp.GenerateOpts{
-		Issuer:      values.GetConfig().App.TOTPIssuer,
-		AccountName: u.Username,
+		Issuer:      values.GetConfig().App.TOTP.Issuer,
+		AccountName: ut.User.Username,
 		Period:      60,
 		Digits:      otp.Digits(otp.DigitsEight),
 	}); err != nil {
 		return err
 	} else {
-		u.TOTPSecret = key.Secret()
+		ut.TOTPSecret = key.Secret()
+	}
+	return
+}
+
+func (u *User) BeforeCreate(tx *gorm.DB) (err error) {
+	err = u.SetPassword(u.Password)
+	if err != nil {
+		return
 	}
 	return
 }
@@ -109,11 +124,11 @@ func (u *User) SetPassword(password string) (err error) {
 	return
 }
 
-func (u *User) TOTPUrl() (string, error) {
-	issuer := values.GetConfig().App.TOTPIssuer
+func (ut *UserTOTPMeta) TOTPUrl() (string, error) {
+	issuer := values.GetConfig().App.TOTP.Issuer
 	if key, err := otp.NewKeyFromURL(
 		fmt.Sprintf("otpauth://totp/%s:%s?secret=%s&issuer=%s",
-			issuer, u.Email, u.TOTPSecret, issuer),
+			issuer, ut.User.Email, ut.TOTPSecret, issuer),
 	); err != nil {
 		return "", err
 	} else {
@@ -121,8 +136,8 @@ func (u *User) TOTPUrl() (string, error) {
 	}
 }
 
-func (u *User) VerifyTOTP(otp string) bool {
-	return totp.Validate(otp, u.TOTPSecret)
+func (ut *UserTOTPMeta) VerifyTOTP(otp string) bool {
+	return totp.Validate(otp, ut.TOTPSecret)
 }
 
 func (u *User) ComparePassword(password string) (bool, error) {
@@ -175,6 +190,19 @@ func (u *User) BeforeDelete(tx *gorm.DB) (err error) {
     ) 
     WHERE id = ?`,
 			team.ID, u.ID, team.ID).Error
+	}
+	appCfg := values.GetConfig().App
+	if appCfg.TOTP.Enabled {
+		err = tx.Where("user_id = ?", u.ID).Delete(&UserTOTPMeta{}).Error
+		if err != nil {
+			return
+		}
+	}
+	if appCfg.OAuth.Enabled {
+		err = tx.Where("user_id = ?", u.ID).Delete(&UserOauthMeta{}).Error
+		if err != nil {
+			return
+		}
 	}
 	return
 }

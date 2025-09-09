@@ -29,6 +29,7 @@ frontend-cache-duration = "10m"
 enabled = false
 agent-email = "no-reply@example.com"
 allowed-email-regex = "^[a-zA-Z0-9._%+-]+@example\\.com$"
+email-template = "./some_template_for_password_reset.html"
 
 [app.email.provider]
 type = "smtp"

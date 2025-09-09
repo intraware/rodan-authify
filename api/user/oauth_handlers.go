@@ -3,11 +3,9 @@ package user
 import (
 	"errors"
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/intraware/rodan-authify/api/shared"
-	"github.com/intraware/rodan-authify/internal/cache"
 	"github.com/intraware/rodan-authify/internal/models"
 	"github.com/intraware/rodan-authify/internal/types"
 	"github.com/intraware/rodan-authify/internal/utils"
@@ -15,12 +13,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 )
-
-var OAuthCache = cache.NewCache[int, models.UserOauthMeta](&cache.CacheOpts{
-	TimeToLive:    3 * time.Minute,
-	CleanInterval: ptr(time.Hour),
-	Revaluate:     ptr(true),
-})
 
 func listOAuthProviders(ctx *gin.Context) {
 	oauthCfg := values.GetConfig().App.OAuth
@@ -33,7 +25,7 @@ func listOAuthProviders(ctx *gin.Context) {
 
 func getUserOAuth(ctx *gin.Context) {
 	auditLog := utils.Logger.WithField("type", "audit")
-	userID := ctx.GetInt("user_id")
+	userID := ctx.GetUint("user_id")
 	var user models.User
 	cacheHit := false
 	if user, cacheHit = shared.UserCache.Get(userID); !cacheHit {
@@ -52,7 +44,8 @@ func getUserOAuth(ctx *gin.Context) {
 		shared.UserCache.Set(userID, user)
 	}
 	var userOauth models.UserOauthMeta
-	if userOauth, ok := OAuthCache.Get(user.ID); !ok {
+	var ok bool
+	if userOauth, ok = shared.OAuthCache.Get(user.ID); !ok {
 		if err := models.DB.Where("user_id = ?", user.ID).First(&userOauth).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				ctx.JSON(http.StatusOK, gin.H{"oauth": nil})
@@ -69,7 +62,7 @@ func getUserOAuth(ctx *gin.Context) {
 			ctx.JSON(http.StatusInternalServerError, types.ErrorResponse{Error: "Failed to get the user oauth metadata"})
 			return
 		}
-		OAuthCache.Set(user.ID, userOauth)
+		shared.OAuthCache.Set(user.ID, userOauth)
 	}
 	ctx.JSON(http.StatusOK, gin.H{
 		"provider":   userOauth.Provider,
@@ -80,7 +73,7 @@ func getUserOAuth(ctx *gin.Context) {
 
 func unlinkUserOAuth(ctx *gin.Context) {
 	auditLog := utils.Logger.WithField("type", "audit")
-	userID := ctx.GetInt("user_id")
+	userID := ctx.GetUint("user_id")
 	var user models.User
 	cacheHit := false
 	if user, cacheHit = shared.UserCache.Get(userID); !cacheHit {
@@ -99,7 +92,8 @@ func unlinkUserOAuth(ctx *gin.Context) {
 		shared.UserCache.Set(userID, user)
 	}
 	var userOauth models.UserOauthMeta
-	if userOauth, ok := OAuthCache.Get(user.ID); !ok {
+	var ok bool
+	if userOauth, ok = shared.OAuthCache.Get(user.ID); !ok {
 		if err := models.DB.Where("user_id = ?", user.ID).First(&userOauth).Error; err != nil {
 			auditLog.WithFields(logrus.Fields{
 				"event":   "unlink_user_oauth",
@@ -112,7 +106,7 @@ func unlinkUserOAuth(ctx *gin.Context) {
 			ctx.JSON(http.StatusInternalServerError, types.ErrorResponse{Error: "Failed to get the user oauth metadata"})
 			return
 		}
-		OAuthCache.Set(user.ID, userOauth)
+		shared.OAuthCache.Set(user.ID, userOauth)
 	}
 	if err := models.DB.Delete(&userOauth).Error; err != nil {
 		auditLog.WithFields(logrus.Fields{
@@ -140,7 +134,7 @@ func unlinkUserOAuth(ctx *gin.Context) {
 		ctx.JSON(http.StatusInternalServerError, types.ErrorResponse{Error: "Failed to update user"})
 		return
 	}
-	OAuthCache.Delete(user.ID)
+	shared.OAuthCache.Delete(user.ID)
 	shared.UserCache.Delete(user.ID)
 	auditLog.WithFields(logrus.Fields{
 		"event":   "unlink_user_oauth",

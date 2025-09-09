@@ -16,10 +16,10 @@ import (
 
 func getMyProfile(ctx *gin.Context) {
 	auditLog := utils.Logger.WithField("type", "audit")
-	userID := ctx.GetInt("user_id")
+	userID := ctx.GetUint("user_id")
 	var user models.User
 	cacheHit := false
-	if user, cacheHit := shared.UserCache.Get(userID); !cacheHit {
+	if user, cacheHit = shared.UserCache.Get(userID); !cacheHit {
 		if err := models.DB.First(&user, userID).Error; err != nil {
 			auditLog.WithFields(logrus.Fields{
 				"event":   "get_my_profile",
@@ -55,7 +55,7 @@ func getMyProfile(ctx *gin.Context) {
 func getUserProfile(ctx *gin.Context) {
 	auditLog := utils.Logger.WithField("type", "audit")
 	userIDStr := ctx.Param("id")
-	userID, err := strconv.Atoi(userIDStr)
+	userIDInt, err := strconv.Atoi(userIDStr)
 	if err != nil {
 		auditLog.WithFields(logrus.Fields{
 			"event":  "get_user_profile",
@@ -67,9 +67,10 @@ func getUserProfile(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, types.ErrorResponse{Error: "Invalid user ID"})
 		return
 	}
+	userID := uint(userIDInt)
 	var user models.User
 	cacheHit := false
-	if user, cacheHit := shared.UserCache.Get(userID); !cacheHit {
+	if user, cacheHit = shared.UserCache.Get(userID); !cacheHit {
 		if err := models.DB.First(&user, userID).Error; err != nil {
 			if err == gorm.ErrRecordNotFound {
 				auditLog.WithFields(logrus.Fields{
@@ -115,7 +116,7 @@ func getUserProfile(ctx *gin.Context) {
 
 func updateProfile(ctx *gin.Context) {
 	auditLog := utils.Logger.WithField("type", "audit")
-	userID := ctx.GetInt("user_id")
+	userID := ctx.GetUint("user_id")
 	var input updateUserRequest
 	if err := ctx.ShouldBindJSON(&input); err != nil {
 		auditLog.WithFields(logrus.Fields{
@@ -130,7 +131,7 @@ func updateProfile(ctx *gin.Context) {
 	}
 	var user models.User
 	cacheHit := false
-	if user, cacheHit := shared.UserCache.Get(userID); !cacheHit {
+	if user, cacheHit = shared.UserCache.Get(userID); !cacheHit {
 		if err := models.DB.First(&user, userID).Error; err != nil {
 			auditLog.WithFields(logrus.Fields{
 				"event":   "update_profile",
@@ -197,7 +198,7 @@ func updateProfile(ctx *gin.Context) {
 
 func deleteProfile(ctx *gin.Context) {
 	auditLog := utils.Logger.WithField("type", "audit")
-	userID := ctx.GetInt("user_id")
+	userID := ctx.GetUint("user_id")
 	result := models.DB.Delete(&models.User{}, userID)
 	if result.Error != nil {
 		auditLog.WithFields(logrus.Fields{

@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/intraware/rodan/internal/utils/values"
+	"github.com/intraware/rodan-authify/internal/utils/values"
 )
 
 func CacheMiddleware(ctx *gin.Context) {

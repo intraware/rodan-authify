@@ -1,10 +1,10 @@
 package auth
 
 type signUpRequest struct {
-	Username       string `json:"username" binding:"required" example:"intraware"`
-	Email          string `json:"email" binding:"required,email" example:"example@intraware.org"`
-	Password       string `json:"password" binding:"required,min=8" example:"mystrongpassword"`
-	GitHubUsername string `json:"github_username" binding:"required" example:"intraware"`
+	Username  string `json:"username" binding:"required" example:"intraware"`
+	Email     string `json:"email" binding:"required,email" example:"example@intraware.org"`
+	Password  string `json:"password" binding:"required,min=8" example:"mystrongpassword"`
+	AvatarURL string `json:"avatar_url" binding:"required" example:"https://..."`
 }
 
 type loginRequest struct {
@@ -18,11 +18,11 @@ type authResponse struct {
 }
 
 type userInfo struct {
-	ID             int    `json:"id" example:"42"`
-	Username       string `json:"username" example:"intraware"`
-	Email          string `json:"email" example:"example@intraware.org"`
-	GitHubUsername string `json:"github_username" example:"intraware"`
-	TeamID         *int   `json:"team_id" example:"1"`
+	ID        uint   `json:"id" example:"42"`
+	Username  string `json:"username" example:"intraware"`
+	Email     string `json:"email" example:"example@intraware.org"`
+	AvatarURL string `json:"avatar_url" example:"https://..."`
+	TeamID    *uint  `json:"team_id" example:"1"`
 }
 
 type resetPasswordRequest struct {

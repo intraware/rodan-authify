@@ -27,7 +27,7 @@ func createTeam(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, types.ErrorResponse{Error: err.Error()})
 		return
 	}
-	userID := ctx.GetInt("user_id")
+	userID := ctx.GetUint("user_id")
 	var user models.User
 	cacheHit := false
 	if user, cacheHit = shared.UserCache.Get(userID); !cacheHit {
@@ -123,7 +123,7 @@ func createTeam(ctx *gin.Context) {
 func joinTeam(ctx *gin.Context) {
 	auditLog := utils.Logger.WithField("type", "audit")
 	idStr := ctx.Param("id")
-	teamID, err := strconv.Atoi(idStr)
+	teamIDInt, err := strconv.Atoi(idStr)
 	if err != nil {
 		auditLog.WithFields(logrus.Fields{
 			"event":  "join_team",
@@ -135,6 +135,7 @@ func joinTeam(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, types.ErrorResponse{Error: "Invalid Team ID"})
 		return
 	}
+	teamID := uint(teamIDInt)
 	var req joinTeamRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		auditLog.WithFields(logrus.Fields{
@@ -146,7 +147,7 @@ func joinTeam(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, types.ErrorResponse{Error: err.Error()})
 		return
 	}
-	userID := ctx.GetInt("user_id")
+	userID := ctx.GetUint("user_id")
 	var user models.User
 	if user, cacheHit := shared.UserCache.Get(userID); !cacheHit {
 		if err := models.DB.First(&user, userID).Error; err != nil {
@@ -272,7 +273,7 @@ func joinTeam(ctx *gin.Context) {
 
 func getMyTeam(ctx *gin.Context) {
 	auditLog := utils.Logger.WithField("type", "audit")
-	userID := ctx.GetInt("user_id")
+	userID := ctx.GetUint("user_id")
 	var user models.User
 	cacheHit := false
 	if user, cacheHit = shared.UserCache.Get(userID); !cacheHit {
@@ -332,7 +333,7 @@ func getMyTeam(ctx *gin.Context) {
 func getTeam(ctx *gin.Context) {
 	auditLog := utils.Logger.WithField("type", "audit")
 	teamIDStr := ctx.Param("id")
-	teamID, err := strconv.Atoi(teamIDStr)
+	teamIDInt, err := strconv.Atoi(teamIDStr)
 	if err != nil {
 		auditLog.WithFields(logrus.Fields{
 			"event":  "get_team",
@@ -344,6 +345,7 @@ func getTeam(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, types.ErrorResponse{Error: "Invalid team ID"})
 		return
 	}
+	teamID := uint(teamIDInt)
 	var team models.Team
 	cacheHit := false
 	if team, cacheHit = shared.TeamCache.Get(teamID); !cacheHit {
@@ -373,11 +375,9 @@ func getTeam(ctx *gin.Context) {
 	}
 	userID, exists := ctx.Get("user_id")
 	isMember := false
-	userIDInt := 0
 	if exists {
-		userIDInt = userID.(int)
 		for _, member := range team.Members {
-			if member.ID == userIDInt {
+			if member.ID == userID {
 				isMember = true
 				break
 			}
@@ -390,7 +390,7 @@ func getTeam(ctx *gin.Context) {
 	auditLog.WithFields(logrus.Fields{
 		"event":     "get_team",
 		"status":    "success",
-		"user_id":   userIDInt,
+		"user_id":   userID,
 		"team_id":   team.ID,
 		"is_member": isMember,
 		"ip":        ctx.ClientIP(),
@@ -432,7 +432,7 @@ func editTeam(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, types.ErrorResponse{Error: "Failed to parse the body"})
 		return
 	}
-	userID := ctx.GetInt("user_id")
+	userID := ctx.GetUint("user_id")
 	var user models.User
 	if user, ok := shared.UserCache.Get(userID); !ok {
 		if err := models.DB.First(&user, userID).Error; err != nil {
@@ -540,7 +540,7 @@ func editTeam(ctx *gin.Context) {
 
 func deleteTeam(ctx *gin.Context) {
 	auditLog := utils.Logger.WithField("type", "audit")
-	userID := ctx.GetInt("user_id")
+	userID := ctx.GetUint("user_id")
 	var user models.User
 	if user, ok := shared.UserCache.Get(userID); !ok {
 		if err := models.DB.First(&user, userID).Error; err != nil {
@@ -625,7 +625,7 @@ func deleteTeam(ctx *gin.Context) {
 
 func leaveTeam(ctx *gin.Context) {
 	auditLog := utils.Logger.WithField("type", "audit")
-	userID := ctx.GetInt("user_id")
+	userID := ctx.GetUint("user_id")
 	var user models.User
 	if user, ok := shared.UserCache.Get(userID); !ok {
 		if err := models.DB.First(&user, userID).Error; err != nil {

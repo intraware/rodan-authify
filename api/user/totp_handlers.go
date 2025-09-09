@@ -2,11 +2,9 @@ package user
 
 import (
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/intraware/rodan-authify/api/shared"
-	"github.com/intraware/rodan-authify/internal/cache"
 	"github.com/intraware/rodan-authify/internal/models"
 	"github.com/intraware/rodan-authify/internal/types"
 	"github.com/intraware/rodan-authify/internal/utils"
@@ -14,17 +12,9 @@ import (
 	"github.com/skip2/go-qrcode"
 )
 
-func ptr[T any](v T) *T { return &v }
-
-var TOTPCache = cache.NewCache[int, models.UserTOTPMeta](&cache.CacheOpts{
-	TimeToLive:    3 * time.Minute,
-	CleanInterval: ptr(time.Hour),
-	Revaluate:     ptr(true),
-})
-
 func profileTOTP(ctx *gin.Context) {
 	auditLog := utils.Logger.WithField("type", "audit")
-	userID := ctx.GetInt("user_id")
+	userID := ctx.GetUint("user_id")
 	var user models.User
 	cacheHit := false
 	if user, cacheHit = shared.UserCache.Get(userID); !cacheHit {
@@ -43,7 +33,8 @@ func profileTOTP(ctx *gin.Context) {
 		shared.UserCache.Set(userID, user)
 	}
 	var userTotp models.UserTOTPMeta
-	if userTotp, ok := TOTPCache.Get(user.ID); !ok {
+	var ok bool
+	if userTotp, ok = shared.TOTPCache.Get(user.Username); !ok {
 		if err := models.DB.Where("user_id = ?", user.ID).First(&userTotp).Error; err != nil {
 			auditLog.WithFields(logrus.Fields{
 				"event":   "profile_totp",
@@ -56,7 +47,7 @@ func profileTOTP(ctx *gin.Context) {
 			ctx.JSON(http.StatusInternalServerError, types.ErrorResponse{Error: "Failed to fetch user"})
 			return
 		}
-		TOTPCache.Set(user.ID, userTotp)
+		shared.TOTPCache.Set(user.Username, userTotp)
 	}
 	totpURL, _ := userTotp.TOTPUrl()
 	png, err := qrcode.Encode(totpURL, qrcode.Medium, 256)
@@ -85,7 +76,7 @@ func profileTOTP(ctx *gin.Context) {
 
 func profileBackupCode(ctx *gin.Context) {
 	auditLog := utils.Logger.WithField("type", "audit")
-	userID := ctx.GetInt("user_id")
+	userID := ctx.GetUint("user_id")
 	var user models.User
 	cacheHit := false
 	if user, cacheHit = shared.UserCache.Get(userID); !cacheHit {
@@ -104,7 +95,8 @@ func profileBackupCode(ctx *gin.Context) {
 		shared.UserCache.Set(userID, user)
 	}
 	var userTotp models.UserTOTPMeta
-	if userTotp, ok := TOTPCache.Get(user.ID); !ok {
+	var ok bool
+	if userTotp, ok = shared.TOTPCache.Get(user.Username); !ok {
 		if err := models.DB.Where("user_id = ?", user.ID).First(&userTotp).Error; err != nil {
 			auditLog.WithFields(logrus.Fields{
 				"event":   "profile_totp",
@@ -117,7 +109,7 @@ func profileBackupCode(ctx *gin.Context) {
 			ctx.JSON(http.StatusInternalServerError, types.ErrorResponse{Error: "Failed to fetch user"})
 			return
 		}
-		TOTPCache.Set(user.ID, userTotp)
+		shared.TOTPCache.Set(user.Username, userTotp)
 	}
 	auditLog.WithFields(logrus.Fields{
 		"event":   "profile_backup_code",

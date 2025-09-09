@@ -56,5 +56,16 @@ func Init(cfg *config.Config) {
 	if err := DB.AutoMigrate(&User{}, &Team{}, &BanHistory{}); err != nil {
 		logrus.Fatalf("Failed to migrate database: %v", err)
 	}
+	appCfg := cfg.App
+	if appCfg.OAuth.Enabled {
+		if err := DB.AutoMigrate(&UserOauthMeta{}); err != nil {
+			logrus.Fatalf("Failed to migrate database: %v", err)
+		}
+	}
+	if appCfg.TOTP.Enabled {
+		if err := DB.AutoMigrate(&UserTOTPMeta{}); err != nil {
+			logrus.Fatalf("Failed to migrate database: %v", err)
+		}
+	}
 	logrus.Println("Database initialized successfully")
 }

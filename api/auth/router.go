@@ -17,6 +17,5 @@ func LoadAuth(r *gin.RouterGroup) {
 	if cfg.OAuth.Enabled {
 		authRouter.GET("/oauth/login", oauthLogin)       // redirect to provider
 		authRouter.GET("/oauth/callback", oauthCallback) // provider callback
-		authRouter.GET("/oauth/logout", oauthLogout)     // optional logout handler
 	}
 }

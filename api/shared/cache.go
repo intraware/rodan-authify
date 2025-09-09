@@ -7,13 +7,13 @@ import (
 	"github.com/intraware/rodan-authify/internal/models"
 )
 
-var UserCache = cache.NewCache[int, models.User](&cache.CacheOpts{
+var UserCache = cache.NewCache[uint, models.User](&cache.CacheOpts{
 	TimeToLive:    3 * time.Minute,
 	CleanInterval: ptr(time.Hour * 2),
 	Revaluate:     ptr(true),
 })
 
-var TeamCache = cache.NewCache[int, models.Team](&cache.CacheOpts{
+var TeamCache = cache.NewCache[uint, models.Team](&cache.CacheOpts{
 	TimeToLive:    3 * time.Minute,
 	CleanInterval: ptr(time.Hour * 2),
 	Revaluate:     ptr(true),
@@ -30,6 +30,18 @@ var ResetPasswordCache cache.Cache[string, models.User]
 var BanHistoryCache = cache.NewCache[string, models.BanHistory](&cache.CacheOpts{
 	TimeToLive:    10 * time.Minute,
 	CleanInterval: ptr(time.Hour * 2),
+	Revaluate:     ptr(true),
+})
+
+var TOTPCache = cache.NewCache[string, models.UserTOTPMeta](&cache.CacheOpts{
+	TimeToLive:    3 * time.Minute,
+	CleanInterval: ptr(time.Hour),
+	Revaluate:     ptr(true),
+})
+
+var OAuthCache = cache.NewCache[uint, models.UserOauthMeta](&cache.CacheOpts{
+	TimeToLive:    3 * time.Minute,
+	CleanInterval: ptr(time.Hour),
 	Revaluate:     ptr(true),
 })
 

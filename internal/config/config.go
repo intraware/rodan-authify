@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"os"
 	"regexp"
 	"time"
 )
@@ -56,6 +57,7 @@ type EmailConfig struct {
 	AgentEmail                string              `mapstructure:"agent-email" reload:"true"`
 	AllowedEmailRegex         string              `mapstructure:"allowed-email-regex" reload:"true"`
 	AllowedEmailCompilexRegex *regexp.Regexp      `mapstructure:"-"`
+	EmailTemplate             string              `mapstructure:"email-template" reload:"true"`
 	Provider                  EmailProviderConfig `mapstructure:"provider" reload:"true"`
 }
 
@@ -134,6 +136,14 @@ func (cfg *Config) Validate() error {
 		}
 		if cfg.App.Email.Provider.Type != "smtp" && cfg.App.Email.Provider.Type != "microsoft-graph" {
 			return fmt.Errorf("unsupported email provider type: %s (must be 'smtp' or 'microsoft-graph')", cfg.App.Email.Provider.Type)
+		}
+		if cfg.App.Email.EmailTemplate != "" {
+			if _, err := os.Stat(cfg.App.Email.EmailTemplate); err != nil {
+				if os.IsNotExist(err) {
+					return fmt.Errorf("email template file does not exist: %s", cfg.App.Email.EmailTemplate)
+				}
+				return fmt.Errorf("failed to access email template file %s: %w", cfg.App.Email.EmailTemplate, err)
+			}
 		}
 	}
 	if cfg.App.OAuth.Enabled {

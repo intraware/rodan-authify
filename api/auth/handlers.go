@@ -1,9 +1,7 @@
 package auth
 
 import (
-	"crypto/rand"
-	"encoding/hex"
-	"fmt"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -30,6 +28,7 @@ import (
 // @Failure      500   {object}  types.ErrorResponse
 // @Router       /auth/signup [post]
 func signUp(ctx *gin.Context) {
+	appCfg := values.GetConfig().App
 	auditLog := utils.Logger.WithField("type", "audit")
 	var req signUpRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
@@ -42,42 +41,91 @@ func signUp(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, types.ErrorResponse{Error: "Failed to parse the body"})
 		return
 	}
-	if !values.GetConfig().App.CompiledEmail.MatchString(req.Email) {
+	if !appCfg.CompiledEmail.MatchString(req.Email) {
 		ctx.JSON(http.StatusBadRequest, types.ErrorResponse{Error: "Bad email ID provided"})
 		return
 	}
-	user := models.User{
-		Username:       req.Username,
-		Email:          req.Email,
-		Password:       req.Password,
-		GitHubUsername: req.GitHubUsername,
-	}
-	if err := models.DB.Create(&user).Error; err != nil {
-		if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "UNIQUE") {
+	var existingUser models.User
+	if err := models.DB.Where("email = ?", req.Email).First(&existingUser).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) && !appCfg.AllowOutsideEmail {
 			auditLog.WithFields(logrus.Fields{
 				"event":    "sign_up",
 				"status":   "failure",
-				"reason":   "duplicate_user",
+				"reason":   "outside_email",
 				"username": req.Username,
 				"email":    req.Email,
-				"github":   req.GitHubUsername,
 				"ip":       ctx.ClientIP(),
-			}).Warn("User already exists during signup")
-			ctx.JSON(http.StatusConflict, types.ErrorResponse{Error: "User with same email or username or github username exists"})
+			}).Warn("User tried to sign up with outside email")
+			ctx.JSON(http.StatusForbidden, types.ErrorResponse{Error: "outside email not allowed"})
 			return
 		}
+	}
+	if existingUser.ID > 0 && existingUser.Active {
 		auditLog.WithFields(logrus.Fields{
 			"event":    "sign_up",
 			"status":   "failure",
-			"reason":   "db_error",
+			"reason":   "user_already_active",
 			"username": req.Username,
 			"email":    req.Email,
-			"github":   req.GitHubUsername,
 			"ip":       ctx.ClientIP(),
-			"error":    err.Error(),
-		}).Error("Failed to create user in DB during signup")
-		ctx.JSON(http.StatusInternalServerError, types.ErrorResponse{Error: "Failed to create user"})
+		}).Warn("User already exists during signup")
+		ctx.JSON(http.StatusConflict, types.ErrorResponse{Error: "User with same email or username or email exists"})
 		return
+	}
+	var user models.User
+	if existingUser.ID > 0 {
+		existingUser.Username = req.Username
+		existingUser.SetPassword(req.Password)
+		existingUser.AvatarURL = req.AvatarURL
+		existingUser.Active = true
+		if err := models.DB.Save(&existingUser).Error; err != nil {
+			auditLog.WithFields(logrus.Fields{
+				"event":    "sign_up",
+				"status":   "failure",
+				"reason":   "db_error",
+				"username": req.Username,
+				"email":    req.Email,
+				"ip":       ctx.ClientIP(),
+				"error":    err.Error(),
+			}).Error("Failed to update user in DB during signup")
+			ctx.JSON(http.StatusInternalServerError, types.ErrorResponse{Error: "Failed to create user"})
+			return
+		}
+		user = existingUser
+	} else if appCfg.AllowOutsideEmail {
+		newUser := models.User{
+			Username:  req.Username,
+			Email:     req.Email,
+			Password:  req.Password,
+			AvatarURL: req.AvatarURL,
+			Active:    true,
+		}
+		if err := models.DB.Create(&newUser).Error; err != nil {
+			if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "UNIQUE") {
+				auditLog.WithFields(logrus.Fields{
+					"event":    "sign_up",
+					"status":   "failure",
+					"reason":   "duplicate_user",
+					"username": req.Username,
+					"email":    req.Email,
+					"ip":       ctx.ClientIP(),
+				}).Warn("User already exists during signup")
+				ctx.JSON(http.StatusConflict, types.ErrorResponse{Error: "User with same email or username or email exists"})
+				return
+			}
+			auditLog.WithFields(logrus.Fields{
+				"event":    "sign_up",
+				"status":   "failure",
+				"reason":   "db_error",
+				"username": req.Username,
+				"email":    req.Email,
+				"ip":       ctx.ClientIP(),
+				"error":    err.Error(),
+			}).Error("Failed to create user in DB during signup")
+			ctx.JSON(http.StatusInternalServerError, types.ErrorResponse{Error: "Failed to create user"})
+			return
+		}
+		user = newUser
 	}
 	token, err := utils.GenerateJWT(0, user.ID, user.Username, values.GetConfig().Server.Security.JWTSecret)
 	if err != nil {
@@ -94,11 +142,11 @@ func signUp(ctx *gin.Context) {
 		return
 	}
 	userInfo := userInfo{
-		ID:             user.ID,
-		Username:       user.Username,
-		Email:          user.Email,
-		GitHubUsername: user.GitHubUsername,
-		TeamID:         user.TeamID,
+		ID:        user.ID,
+		Username:  user.Username,
+		Email:     user.Email,
+		AvatarURL: user.AvatarURL,
+		TeamID:    user.TeamID,
 	}
 	auditLog.WithFields(logrus.Fields{
 		"event":    "sign_up",
@@ -106,7 +154,6 @@ func signUp(ctx *gin.Context) {
 		"user_id":  user.ID,
 		"username": user.Username,
 		"email":    user.Email,
-		"github":   user.GitHubUsername,
 		"ip":       ctx.ClientIP(),
 	}).Info("User signed up successfully")
 	ctx.JSON(http.StatusCreated, authResponse{
@@ -196,6 +243,20 @@ func login(ctx *gin.Context) {
 		ctx.JSON(http.StatusForbidden, types.ErrorResponse{Error: "Team is banned"})
 		return
 	}
+	if !user.Active {
+		auditLog.WithFields(logrus.Fields{
+			"event":     "login",
+			"status":    "failure",
+			"reason":    "inactive",
+			"user_id":   user.ID,
+			"username":  user.Username,
+			"team_id":   user.Team.ID,
+			"team_name": user.Team.Name,
+			"ip":        ctx.ClientIP(),
+		}).Warn("Inactive user attempted login")
+		ctx.JSON(http.StatusForbidden, types.ErrorResponse{Error: "User is not active"})
+		return
+	}
 	isValid, err := user.ComparePassword(req.Password)
 	if err != nil || !isValid {
 		auditLog.WithFields(logrus.Fields{
@@ -231,11 +292,11 @@ func login(ctx *gin.Context) {
 		return
 	}
 	userInfo := userInfo{
-		ID:             user.ID,
-		Username:       user.Username,
-		Email:          user.Email,
-		GitHubUsername: user.GitHubUsername,
-		TeamID:         user.TeamID,
+		ID:        user.ID,
+		Username:  user.Username,
+		Email:     user.Email,
+		AvatarURL: user.AvatarURL,
+		TeamID:    user.TeamID,
 	}
 	auditLog.WithFields(logrus.Fields{
 		"event":    "login",
@@ -243,7 +304,6 @@ func login(ctx *gin.Context) {
 		"user_id":  user.ID,
 		"username": user.Username,
 		"email":    user.Email,
-		"github":   user.GitHubUsername,
 		"ip":       ctx.ClientIP(),
 		"cache":    cacheHit,
 	}).Info("User logged in successfully")
@@ -251,229 +311,4 @@ func login(ctx *gin.Context) {
 		Token: token,
 		User:  userInfo,
 	})
-}
-
-// forgotPassword godoc
-// @Summary      Forgot password
-// @Description  Initiates password reset process using OTP or backup code
-// @Tags         auth
-// @Accept       json
-// @Produce      json
-// @Param        request  body      forgotPasswordRequest  true  "Forgot password request"
-// @Success      200      {object}  resetTokenResponse
-// @Failure      400      {object}  types.ErrorResponse
-// @Failure      401      {object}  types.ErrorResponse
-// @Failure      404      {object}  types.ErrorResponse
-// @Failure      500      {object}  types.ErrorResponse
-// @Router       /auth/forgot-password [post]
-func forgotPassword(ctx *gin.Context) {
-	var input forgotPasswordRequest
-	var user models.User
-	auditLog := utils.Logger.WithField("type", "audit")
-	if err := ctx.ShouldBindJSON(&input); err != nil {
-		auditLog.WithFields(logrus.Fields{
-			"event":  "forgot_password",
-			"status": "failure",
-			"reason": "invalid_json",
-			"ip":     ctx.ClientIP(),
-		}).Warn("Invalid forgot password input")
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
-		return
-	}
-	otpSet := input.OTP != nil && *input.OTP != ""
-	backupSet := input.BackupCode != nil && *input.BackupCode != ""
-	if (otpSet && backupSet) || (!otpSet && !backupSet) {
-		auditLog.WithFields(logrus.Fields{
-			"event":    "forgot_password",
-			"status":   "failure",
-			"reason":   "invalid_auth_method_selection",
-			"username": input.Username,
-			"ip":       ctx.ClientIP(),
-		}).Warn("Invalid OTP/Backup Code usage")
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Provide either OTP or Backup Code, not both"})
-		return
-	}
-	if value, ok := shared.LoginCache.Get(input.Username); ok {
-		ctx.Set("message", fmt.Sprintf("User %d loaded from login cache", value.ID))
-		user = value
-		auditLog.WithFields(logrus.Fields{
-			"event":    "forgot_password",
-			"status":   "info",
-			"reason":   "cache_hit",
-			"user_id":  user.ID,
-			"username": user.Username,
-			"ip":       ctx.ClientIP(),
-		}).Info("User loaded from cache for password reset")
-	} else {
-		if err := models.DB.Where("username = ?", input.Username).First(&user).Error; err != nil {
-			ctx.Set("message", err.Error())
-			auditLog.WithFields(logrus.Fields{
-				"event":    "forgot_password",
-				"status":   "failure",
-				"reason":   "user_not_found",
-				"username": input.Username,
-				"ip":       ctx.ClientIP(),
-			}).Warn("User not found for forgot password")
-			ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email or password"})
-			return
-		}
-	}
-	if otpSet && user.VerifyTOTP(*input.OTP) {
-		ctx.Set("message", fmt.Sprintf("User %d resetting password using TOTP", user.ID))
-		auditLog.WithFields(logrus.Fields{
-			"event":    "forgot_password_auth",
-			"status":   "success",
-			"method":   "totp",
-			"user_id":  user.ID,
-			"username": user.Username,
-			"ip":       ctx.ClientIP(),
-		}).Info("Password reset authorized via TOTP")
-	} else if backupSet && user.BackupCode == *input.BackupCode {
-		ctx.Set("message", fmt.Sprintf("User %d resetting password using Backup code", user.ID))
-		auditLog.WithFields(logrus.Fields{
-			"event":    "forgot_password_auth",
-			"status":   "success",
-			"method":   "backup_code",
-			"user_id":  user.ID,
-			"username": user.Username,
-			"ip":       ctx.ClientIP(),
-		}).Info("Password reset authorized via Backup Code")
-	} else {
-		errMsg := "Invalid credentials"
-		method := "unknown"
-		if otpSet {
-			errMsg = "Invalid OTP"
-			method = "totp"
-		} else if backupSet {
-			errMsg = "Invalid Backup Code"
-			method = "backup_code"
-		}
-		auditLog.WithFields(logrus.Fields{
-			"event":    "forgot_password_auth",
-			"status":   "failure",
-			"reason":   "invalid_" + method,
-			"user_id":  user.ID,
-			"username": user.Username,
-			"ip":       ctx.ClientIP(),
-		}).Warn("Failed password reset authentication")
-		ctx.JSON(http.StatusUnauthorized, gin.H{"error": errMsg})
-		return
-	}
-	random := make([]byte, 20)
-	_, err := rand.Read(random)
-	if err != nil {
-		ctx.Set("message", err.Error())
-		auditLog.WithFields(logrus.Fields{
-			"event":    "forgot_password",
-			"status":   "failure",
-			"reason":   "token_generation_failed",
-			"user_id":  user.ID,
-			"username": user.Username,
-			"ip":       ctx.ClientIP(),
-			"error":    err.Error(),
-		}).Error("Failed to generate password reset token")
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
-		return
-	}
-	token := hex.EncodeToString(random)
-	shared.ResetPasswordCache.Set(token, user)
-	auditLog.WithFields(logrus.Fields{
-		"event":    "forgot_password_token_issued",
-		"status":   "success",
-		"user_id":  user.ID,
-		"username": user.Username,
-		"ip":       ctx.ClientIP(),
-	}).Info("Password reset token successfully issued")
-	ctx.JSON(http.StatusOK, resetTokenResponse{
-		ResetToken: token,
-	})
-}
-
-// resetPassword godoc
-// @Summary      Reset password
-// @Description  Resets user password using a valid reset token
-// @Tags         auth
-// @Accept       json
-// @Produce      json
-// @Param        token    path      string               true  "Reset token"
-// @Param        request  body      resetPasswordRequest true  "New password data"
-// @Success      200      {object}  types.SuccessResponse
-// @Failure      400      {object}  types.ErrorResponse
-// @Failure      401      {object}  types.ErrorResponse
-// @Failure      500      {object}  types.ErrorResponse
-// @Router       /auth/reset-password/{token} [post]
-func resetPassword(ctx *gin.Context) {
-	token := ctx.Param("token")
-	auditLog := utils.Logger.WithField("type", "audit")
-	if token == "" {
-		auditLog.WithFields(logrus.Fields{
-			"event":  "reset_password",
-			"status": "failure",
-			"reason": "missing_token",
-			"ip":     ctx.ClientIP(),
-		}).Warn("Reset password request missing token")
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Missing reset token"})
-		return
-	}
-	user, ok := shared.ResetPasswordCache.Get(token)
-	if !ok {
-		auditLog.WithFields(logrus.Fields{
-			"event":  "reset_password",
-			"status": "failure",
-			"reason": "invalid_or_expired_token",
-			"token":  token,
-			"ip":     ctx.ClientIP(),
-		}).Warn("Reset password token invalid or expired")
-		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired token"})
-		return
-	}
-	var input resetPasswordRequest
-	if err := ctx.ShouldBindJSON(&input); err != nil {
-		auditLog.WithFields(logrus.Fields{
-			"event":    "reset_password",
-			"status":   "failure",
-			"reason":   "invalid_json",
-			"user_id":  user.ID,
-			"username": user.Username,
-			"ip":       ctx.ClientIP(),
-		}).Warn("Invalid input during password reset")
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
-		return
-	}
-	if err := user.SetPassword(input.Password); err != nil {
-		auditLog.WithFields(logrus.Fields{
-			"event":    "reset_password",
-			"status":   "failure",
-			"reason":   "set_password_failed",
-			"user_id":  user.ID,
-			"username": user.Username,
-			"ip":       ctx.ClientIP(),
-			"error":    err.Error(),
-		}).Error("Failed to hash new password")
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to set password"})
-		return
-	}
-	if err := models.DB.Model(&user).Update("password", user.Password).Error; err != nil {
-		auditLog.WithFields(logrus.Fields{
-			"event":    "reset_password",
-			"status":   "failure",
-			"reason":   "db_update_failed",
-			"user_id":  user.ID,
-			"username": user.Username,
-			"ip":       ctx.ClientIP(),
-			"error":    err.Error(),
-		}).Error("Failed to update password in DB")
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update password"})
-		return
-	}
-	shared.ResetPasswordCache.Delete(token)
-	shared.LoginCache.Delete(user.Email)
-	auditLog.WithFields(logrus.Fields{
-		"event":    "reset_password",
-		"status":   "success",
-		"user_id":  user.ID,
-		"username": user.Username,
-		"ip":       ctx.ClientIP(),
-	}).Info("Password reset successfully")
-	ctx.JSON(http.StatusOK, gin.H{"message": "Password has been reset successfully"})
 }
