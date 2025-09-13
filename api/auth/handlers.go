@@ -56,7 +56,7 @@ func signUp(ctx *gin.Context) {
 				"email":    req.Email,
 				"ip":       ctx.ClientIP(),
 			}).Warn("User tried to sign up with outside email")
-			ctx.JSON(http.StatusForbidden, types.ErrorResponse{Error: "outside email not allowed"})
+			ctx.JSON(http.StatusForbidden, types.ErrorResponse{Error: "Outside email not allowed"})
 			return
 		}
 	}
@@ -69,7 +69,7 @@ func signUp(ctx *gin.Context) {
 			"email":    req.Email,
 			"ip":       ctx.ClientIP(),
 		}).Warn("User already exists during signup")
-		ctx.JSON(http.StatusConflict, types.ErrorResponse{Error: "User with same email or username or email exists"})
+		ctx.JSON(http.StatusConflict, types.ErrorResponse{Error: "User with same email exists"})
 		return
 	}
 	var user models.User

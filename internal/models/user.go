@@ -39,7 +39,7 @@ type User struct {
 
 type UserOauthMeta struct {
 	gorm.Model
-	UserID       int    `gorm:"column:user_id;not null;index"`
+	UserID       uint   `gorm:"column:user_id;not null;index"`
 	Provider     string `gorm:"not null"`
 	ProviderID   string `gorm:"not null;unique"`
 	AccessToken  string `gorm:"type:text"`
@@ -53,7 +53,7 @@ type UserTOTPMeta struct {
 	gorm.Model
 	BackupCode string `gorm:"unique" json:"backup_code"`
 	TOTPSecret string `gorm:"unique" json:"totp_secret"`
-	UserID     int    `gorm:"column:user_id;not null;index" json:"user_id"`
+	UserID     uint   `gorm:"column:user_id;not null;index" json:"user_id"`
 
 	User *User `gorm:"foreignKey:UserID"`
 }
