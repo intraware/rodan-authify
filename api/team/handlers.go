@@ -56,68 +56,55 @@ func createTeam(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, types.ErrorResponse{Error: "User is already in a team"})
 		return
 	}
-	team := models.Team{
-		Name:     req.Name,
-		LeaderID: userID,
-	}
-	if err := models.DB.Create(&team).Error; err != nil {
-		auditLog.WithFields(logrus.Fields{
-			"event":     "create_team",
-			"status":    "failure",
-			"reason":    "db_team_create_failed",
-			"cache_hit": cacheHit,
-			"user_id":   user.ID,
-			"username":  user.Username,
-			"ip":        ctx.ClientIP(),
-		}).Error("Failed to create team")
-		ctx.JSON(http.StatusInternalServerError, types.ErrorResponse{Error: "Failed to create team"})
-		return
-	}
-	user.TeamID = &team.ID
-	if err := models.DB.Save(&user).Error; err != nil {
-		_ = models.DB.Delete(&team) // rollback team
-		auditLog.WithFields(logrus.Fields{
-			"event":     "create_team",
-			"status":    "failure",
-			"reason":    "user_save_failed",
-			"cache_hit": cacheHit,
-			"user_id":   user.ID,
-			"username":  user.Username,
-			"team_id":   team.ID,
-			"ip":        ctx.ClientIP(),
-		}).Error("Failed to associate user with team after creation")
-		ctx.JSON(http.StatusInternalServerError, types.ErrorResponse{Error: "Failed to add user to team"})
-		return
-	} else {
+	err := models.DB.Transaction(func(tx *gorm.DB) error {
+		team := models.Team{
+			Name:     req.Name,
+			LeaderID: userID,
+		}
+		if err := tx.Create(&team).Error; err != nil {
+			auditLog.WithFields(logrus.Fields{
+				"event":     "create_team",
+				"status":    "failure",
+				"reason":    "db_team_create_failed",
+				"cache_hit": cacheHit,
+				"user_id":   user.ID,
+				"username":  user.Username,
+				"ip":        ctx.ClientIP(),
+			}).Error("Failed to create team")
+			return err
+		}
+		user.TeamID = &team.ID
+		if err := tx.Save(&user).Error; err != nil {
+			auditLog.WithFields(logrus.Fields{
+				"event":     "create_team",
+				"status":    "failure",
+				"reason":    "user_save_failed",
+				"cache_hit": cacheHit,
+				"user_id":   user.ID,
+				"username":  user.Username,
+				"team_id":   team.ID,
+				"ip":        ctx.ClientIP(),
+			}).Error("Failed to associate user with team after creation")
+			return err
+		}
 		shared.UserCache.Delete(user.ID)
-	}
-	var teamResponse models.Team
-	if err := models.DB.First(&teamResponse, team.ID).Error; err != nil {
+		shared.TeamCache.Set(team.ID, team)
 		auditLog.WithFields(logrus.Fields{
 			"event":     "create_team",
-			"status":    "failure",
-			"reason":    "team_reload_failed",
+			"status":    "success",
 			"cache_hit": cacheHit,
 			"user_id":   user.ID,
 			"username":  user.Username,
 			"team_id":   team.ID,
+			"team_name": team.Name,
 			"ip":        ctx.ClientIP(),
-		}).Error("Failed to reload created team")
-		ctx.JSON(http.StatusInternalServerError, types.ErrorResponse{Error: "Failed to load team"})
-		return
+		}).Info("Team created successfully")
+		ctx.JSON(http.StatusCreated, buildTeamResponse(team))
+		return nil
+	})
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, types.ErrorResponse{Error: "Failed to create team"})
 	}
-	shared.TeamCache.Set(team.ID, teamResponse)
-	auditLog.WithFields(logrus.Fields{
-		"event":     "create_team",
-		"status":    "success",
-		"cache_hit": cacheHit,
-		"user_id":   user.ID,
-		"username":  user.Username,
-		"team_id":   team.ID,
-		"team_name": team.Name,
-		"ip":        ctx.ClientIP(),
-	}).Info("Team created successfully")
-	ctx.JSON(http.StatusCreated, buildTeamResponse(teamResponse))
 }
 
 func joinTeam(ctx *gin.Context) {

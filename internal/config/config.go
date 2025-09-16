@@ -58,6 +58,7 @@ type EmailConfig struct {
 	AllowedEmailRegex         string              `mapstructure:"allowed-email-regex" reload:"true"`
 	AllowedEmailCompilexRegex *regexp.Regexp      `mapstructure:"-"`
 	EmailTemplate             string              `mapstructure:"email-template" reload:"true"`
+	EmailSubject              string              `mapstructure:"email-subject" reload:"true"`
 	Provider                  EmailProviderConfig `mapstructure:"provider" reload:"true"`
 }
 

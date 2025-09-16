@@ -1,25 +1,48 @@
 package auth
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"io"
 	"net/http"
 
 	"github.com/intraware/rodan-authify/internal/config"
 	"github.com/intraware/rodan-authify/internal/models"
 	"github.com/intraware/rodan-authify/internal/utils/email"
+	"github.com/intraware/rodan-authify/internal/utils/values"
 	"golang.org/x/oauth2"
 )
 
 func sendResetToken(userEmail, token string) error {
-	var emailObj = email.NewEmail()
-	if emailObj == nil {
-		return fmt.Errorf("Email is not emabled in the config")
+	emailCfg := values.GetConfig().App.Email
+	emailObj, err := email.NewEmail()
+	if err != nil {
+		return fmt.Errorf("failed to init email service: %w", err)
 	}
-	emailObj.Send
+	if emailObj == nil {
+		return fmt.Errorf("email service is disabled")
+	}
+	if !emailCfg.AllowedEmailCompilexRegex.MatchString(userEmail) {
+		return fmt.Errorf("email does not match allowed regex")
+	}
+	tmpl, err := template.New("resetEmail").Parse(emailCfg.EmailTemplate)
+	if err != nil {
+		return fmt.Errorf("failed to parse email template: %w", err)
+	}
+	data := struct {
+		Token string
+	}{
+		Token: token,
+	}
+	var body bytes.Buffer
+	if err := tmpl.Execute(&body, data); err != nil {
+		return fmt.Errorf("failed to execute email template: %w", err)
+	}
+	return emailObj.DeliveryAgent.SendEmail(userEmail, emailCfg.EmailSubject, body.String())
 }
 
 func generateResetToken() (token string, err error) {
