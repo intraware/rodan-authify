@@ -82,12 +82,13 @@ type OAuthConfig struct {
 }
 
 type OAuthProviderConfig struct {
-	ClientID     string   `mapstructure:"client_id" reload:"true"`
-	ClientSecret string   `mapstructure:"client_secret" reload:"true"`
-	Scopes       []string `mapstructure:"scopes" reload:"true"`
-	AuthURL      string   `mapstructure:"auth_url" reload:"true"`
-	TokenURL     string   `mapstructure:"token_url" reload:"true"`
-	UserInfoURL  string   `mapstructure:"userinfo_url" reload:"true"`
+	ClientID     string            `mapstructure:"client_id" reload:"true"`
+	ClientSecret string            `mapstructure:"client_secret" reload:"true"`
+	Scopes       []string          `mapstructure:"scopes" reload:"true"`
+	AuthURL      string            `mapstructure:"auth_url" reload:"true"`
+	TokenURL     string            `mapstructure:"token_url" reload:"true"`
+	UserInfoURL  string            `mapstructure:"userinfo_url" reload:"true"`
+	FieldMap     map[string]string `mapstructure:"field-map" reload:"true"`
 }
 
 type TOTPConfig struct {

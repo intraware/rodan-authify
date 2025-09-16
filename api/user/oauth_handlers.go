@@ -2,6 +2,7 @@ package user
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -75,8 +76,7 @@ func unlinkUserOAuth(ctx *gin.Context) {
 	auditLog := utils.Logger.WithField("type", "audit")
 	userID := ctx.GetUint("user_id")
 	var user models.User
-	cacheHit := false
-	if user, cacheHit = shared.UserCache.Get(userID); !cacheHit {
+	if user, cacheHit := shared.UserCache.Get(userID); !cacheHit {
 		if err := models.DB.First(&user, userID).Error; err != nil {
 			auditLog.WithFields(logrus.Fields{
 				"event":   "unlink_user_oauth",
@@ -85,15 +85,14 @@ func unlinkUserOAuth(ctx *gin.Context) {
 				"user_id": userID,
 				"ip":      ctx.ClientIP(),
 				"error":   err.Error(),
-			}).Error("Failed to fetch user in getUserOAuth")
+			}).Error("Failed to fetch user in unlinkUserOAuth")
 			ctx.JSON(http.StatusInternalServerError, types.ErrorResponse{Error: "Failed to get the user"})
 			return
 		}
 		shared.UserCache.Set(userID, user)
 	}
 	var userOauth models.UserOauthMeta
-	var ok bool
-	if userOauth, ok = shared.OAuthCache.Get(user.ID); !ok {
+	if userOauth, ok := shared.OAuthCache.Get(user.ID); !ok {
 		if err := models.DB.Where("user_id = ?", user.ID).First(&userOauth).Error; err != nil {
 			auditLog.WithFields(logrus.Fields{
 				"event":   "unlink_user_oauth",
@@ -102,36 +101,31 @@ func unlinkUserOAuth(ctx *gin.Context) {
 				"user_id": userID,
 				"ip":      ctx.ClientIP(),
 				"error":   err.Error(),
-			}).Error("Failed to fetch oauth metadta in getUserOAuth")
+			}).Error("Failed to fetch oauth metadata in unlinkUserOAuth")
 			ctx.JSON(http.StatusInternalServerError, types.ErrorResponse{Error: "Failed to get the user oauth metadata"})
 			return
 		}
 		shared.OAuthCache.Set(user.ID, userOauth)
 	}
-	if err := models.DB.Delete(&userOauth).Error; err != nil {
+	err := models.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Delete(&userOauth).Error; err != nil {
+			return fmt.Errorf("delete_user_oauth: %w", err)
+		}
+		user.Active = false
+		if err := tx.Model(&user).Update("active", false).Error; err != nil {
+			return fmt.Errorf("update_user: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
 		auditLog.WithFields(logrus.Fields{
 			"event":   "unlink_user_oauth",
 			"status":  "failure",
-			"reason":  "db_delete_error",
 			"user_id": userID,
 			"ip":      ctx.ClientIP(),
 			"error":   err.Error(),
-		}).Error("Failed to unlink oauth metadata")
-		ctx.JSON(http.StatusInternalServerError, types.ErrorResponse{Error: "Failed to unlink oauth metadata"})
-		return
-	}
-	user.Active = false
-	if err := models.DB.Updates(&user).Error; err != nil {
-		_ = models.DB.Create(&userOauth) // rollback
-		auditLog.WithFields(logrus.Fields{
-			"event":   "unlink_user_oauth",
-			"status":  "failure",
-			"reason":  "db_update_error",
-			"user_id": userID,
-			"ip":      ctx.ClientIP(),
-			"error":   err.Error(),
-		}).Error("Failed to update user")
-		ctx.JSON(http.StatusInternalServerError, types.ErrorResponse{Error: "Failed to update user"})
+		}).Error("Failed to unlink oauth account in transaction")
+		ctx.JSON(http.StatusInternalServerError, types.ErrorResponse{Error: "Failed to unlink oauth account"})
 		return
 	}
 	shared.OAuthCache.Delete(user.ID)

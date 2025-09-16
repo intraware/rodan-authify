@@ -57,6 +57,12 @@ scopes        = ["openid", "email", "profile"]
 auth_url      = "https://accounts.google.com/o/oauth2/auth"
 token_url     = "https://oauth2.googleapis.com/token"
 userinfo_url  = "https://www.googleapis.com/oauth2/v3/userinfo"
+field-map = {  # this is for mapping client responses from oauth to models data
+  provider_id = "sub", 
+  username    = "name", 
+  email       = "email", 
+  avatar_url  = "picture" 
+}
 
 # [app.oauth.providers.github]
 # client_id     = "your-github-client-id"

@@ -130,7 +130,7 @@ func forgotPassword(ctx *gin.Context) {
 				"email":    user.Email,
 				"reason":   "send_email_failed",
 				"ip":       ctx.ClientIP(),
-			}).Error("Failed to send password reset email")
+			}).Errorf("Failed to send password reset email: %v", err)
 			ctx.JSON(http.StatusInternalServerError, types.ErrorResponse{
 				Error: "Failed to send the email",
 			})
