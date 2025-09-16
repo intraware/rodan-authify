@@ -11,16 +11,16 @@ import (
 //TODO: check the expiry and unban people
 
 func BanMiddleware(ctx *gin.Context) {
-	user_id := ctx.GetInt("user_id")
+	userId := ctx.GetUint("user_id")
 	var user models.User
-	if val, ok := shared.UserCache.Get(user_id); ok {
+	if val, ok := shared.UserCache.Get(userId); ok {
 		user = val
 	} else {
-		if err := models.DB.First(&user, user_id).Error; err != nil {
+		if err := models.DB.First(&user, userId).Error; err != nil {
 			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch user from DB"})
 			return
 		} else {
-			shared.UserCache.Set(user_id, user)
+			shared.UserCache.Set(userId, user)
 		}
 	}
 	if user.Ban {
