@@ -8,6 +8,6 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o rodan-aut
 
 FROM gcr.io/distroless/cc AS runner
 WORKDIR /root
-COPY --from=builder /app/target/release/rodan-authify .
+COPY --from=builder /app/rodan-authify .
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 CMD ["/root/rodan-authify"]
