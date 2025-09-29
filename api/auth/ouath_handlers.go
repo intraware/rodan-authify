@@ -8,10 +8,9 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/intraware/rodan-authify/internal/cache"
+	"github.com/intraware/rodan-authify/api/shared"
 	"github.com/intraware/rodan-authify/internal/models"
 	"github.com/intraware/rodan-authify/internal/types"
 	"github.com/intraware/rodan-authify/internal/utils"
@@ -20,14 +19,6 @@ import (
 	"golang.org/x/oauth2"
 	"gorm.io/gorm"
 )
-
-func ptr[T any](v T) *T { return &v }
-
-var stateCache = cache.NewCache[string, struct{}](&cache.CacheOpts{
-	TimeToLive:    5 * time.Minute,
-	CleanInterval: ptr(time.Hour),
-	Revaluate:     ptr(false),
-})
 
 func oauthLogin(ctx *gin.Context) {
 	oauthCfg := values.GetConfig().App.OAuth
@@ -71,7 +62,7 @@ func oauthLogin(ctx *gin.Context) {
 	}
 	state := fmt.Sprintf("login:%s", hex.EncodeToString(random))
 	authURL := conf.AuthCodeURL(state, oauth2.AccessTypeOffline)
-	stateCache.Set(state, struct{}{})
+	shared.OauthStateCache.Set(state, struct{}{})
 	auditLog.WithFields(logrus.Fields{
 		"event":    "oauth_login",
 		"status":   "success",
@@ -90,7 +81,7 @@ func oauthCallback(ctx *gin.Context) {
 	providerName := ctx.Param("provider")
 	conf := buildOAuthConfig(providerName, &oauthCfg)
 	state := ctx.Query("state")
-	if _, ok := stateCache.Get(state); !ok {
+	if _, ok := shared.OauthStateCache.Get(state); !ok {
 		auditLog.WithFields(logrus.Fields{
 			"event":    "oauth_callback",
 			"status":   "failure",
@@ -101,7 +92,7 @@ func oauthCallback(ctx *gin.Context) {
 		ctx.JSON(http.StatusForbidden, types.ErrorResponse{Error: "Not authorized"})
 		return
 	}
-	stateCache.Delete(state)
+	shared.OauthStateCache.Delete(state)
 	code := ctx.Query("code")
 	if code == "" {
 		auditLog.WithFields(logrus.Fields{
@@ -309,7 +300,7 @@ func oauthLink(ctx *gin.Context) {
 	userID := ctx.GetUint("user_id")
 	state := fmt.Sprintf("link:%s:%d:%s", providerName, userID, hex.EncodeToString(random))
 	authURL := conf.AuthCodeURL(state, oauth2.AccessTypeOffline)
-	stateCache.Set(state, struct{}{})
+	shared.OauthStateCache.Set(state, struct{}{})
 	auditLog.WithFields(logrus.Fields{
 		"event":    "oauth_link",
 		"status":   "success",
@@ -326,7 +317,7 @@ func oauthLinkCallBack(ctx *gin.Context) {
 	providerName := ctx.Param("provider")
 	conf := buildOauthLinkConfig(providerName, &oauthCfg)
 	state := ctx.Query("state")
-	if _, ok := stateCache.Get(state); !ok {
+	if _, ok := shared.OauthStateCache.Get(state); !ok {
 		auditLog.WithFields(logrus.Fields{
 			"event":    "oauth_link_callback",
 			"status":   "failure",
@@ -337,7 +328,7 @@ func oauthLinkCallBack(ctx *gin.Context) {
 		ctx.JSON(http.StatusForbidden, types.ErrorResponse{Error: "Invalid or expired state"})
 		return
 	}
-	stateCache.Delete(state)
+	shared.OauthStateCache.Delete(state)
 	parts := strings.Split(state, ":")
 	if len(parts) < 4 {
 		auditLog.WithFields(logrus.Fields{

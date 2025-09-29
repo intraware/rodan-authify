@@ -46,4 +46,9 @@ func Init(config *config.AppConfig) {
 		CleanInterval: ptr(time.Hour),
 		Revaluate:     ptr(true),
 	})
+	OauthStateCache = cache.NewCache[string, struct{}](&cache.CacheOpts{
+		TimeToLive:    5 * time.Minute,
+		CleanInterval: ptr(time.Hour),
+		Revaluate:     ptr(false),
+	})
 }
