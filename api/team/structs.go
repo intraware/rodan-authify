@@ -14,6 +14,10 @@ type teamResponse struct {
 	Code     string     `json:"code" example:"ABC123"`
 	LeaderID uint       `json:"leader_id" example:"42"`
 	Members  []userInfo `json:"members"`
+
+	FirstBlood  *[]uint `json:"first_blood,omitempty" example:"[1,2,3]"`
+	SecondBlood *[]uint `json:"second_blood,omitempty" example:"[1,2,3]"`
+	ThirdBlood  *[]uint `json:"third_blood,omitempty" example:"[1,2,3]"`
 }
 
 type userInfo struct {

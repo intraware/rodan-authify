@@ -92,7 +92,8 @@ func unlinkUserOAuth(ctx *gin.Context) {
 		shared.UserCache.Set(userID, user)
 	}
 	var userOauth models.UserOauthMeta
-	if userOauth, ok := shared.OAuthCache.Get(user.ID); !ok {
+	var ok bool
+	if userOauth, ok = shared.OAuthCache.Get(user.ID); !ok {
 		if err := models.DB.Where("user_id = ?", user.ID).First(&userOauth).Error; err != nil {
 			auditLog.WithFields(logrus.Fields{
 				"event":   "unlink_user_oauth",

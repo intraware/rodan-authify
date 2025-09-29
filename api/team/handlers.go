@@ -421,7 +421,8 @@ func editTeam(ctx *gin.Context) {
 	}
 	userID := ctx.GetUint("user_id")
 	var user models.User
-	if user, ok := shared.UserCache.Get(userID); !ok {
+	var ok bool
+	if user, ok = shared.UserCache.Get(userID); !ok {
 		if err := models.DB.First(&user, userID).Error; err != nil {
 			auditLog.WithFields(logrus.Fields{
 				"event":   "edit_team",
@@ -529,7 +530,8 @@ func deleteTeam(ctx *gin.Context) {
 	auditLog := utils.Logger.WithField("type", "audit")
 	userID := ctx.GetUint("user_id")
 	var user models.User
-	if user, ok := shared.UserCache.Get(userID); !ok {
+	var ok bool
+	if user, ok = shared.UserCache.Get(userID); !ok {
 		if err := models.DB.First(&user, userID).Error; err != nil {
 			auditLog.WithFields(logrus.Fields{
 				"event":   "delete_team",
@@ -614,7 +616,8 @@ func leaveTeam(ctx *gin.Context) {
 	auditLog := utils.Logger.WithField("type", "audit")
 	userID := ctx.GetUint("user_id")
 	var user models.User
-	if user, ok := shared.UserCache.Get(userID); !ok {
+	var ok bool
+	if user, ok = shared.UserCache.Get(userID); !ok {
 		if err := models.DB.First(&user, userID).Error; err != nil {
 			auditLog.WithFields(logrus.Fields{
 				"event":   "leave_team",

@@ -1,11 +1,14 @@
 package user
 
 type userInfo struct {
-	ID        uint   `json:"id" example:"42"`
-	Username  string `json:"username" example:"intraware"`
-	Email     string `json:"email" example:"example@intraware.org"`
-	AvatarURL string `json:"avatar_url,omitempty" example:"https://.."`
-	TeamID    *uint  `json:"team_id" example:"1"`
+	ID          uint    `json:"id" example:"42"`
+	Username    string  `json:"username" example:"intraware"`
+	Email       string  `json:"email" example:"example@intraware.org"`
+	AvatarURL   string  `json:"avatar_url,omitempty" example:"https://.."`
+	TeamID      *uint   `json:"team_id" example:"1"`
+	FirstBlood  *[]uint `json:"first_blood,omitempty" example:"[1,2,3]"`
+	SecondBlood *[]uint `json:"second_blood,omitempty" example:"[1,2,3]"`
+	ThirdBlood  *[]uint `json:"third_blood,omitempty" example:"[1,2,3]"`
 }
 
 type updateUserRequest struct {
