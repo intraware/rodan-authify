@@ -56,6 +56,19 @@ func Init(cfg *config.Config) {
 	if err := DB.AutoMigrate(&User{}, &Team{}, &BanHistory{}); err != nil {
 		logrus.Fatalf("Failed to migrate database: %v", err)
 	}
+	if !DB.Migrator().HasConstraint(&Team{}, "fk_teams_leader") {
+		err := DB.Exec(`
+        ALTER TABLE teams
+        ADD CONSTRAINT fk_teams_leader
+        FOREIGN KEY (leader_id) REFERENCES users(id)
+        ON UPDATE CASCADE ON DELETE SET NULL
+    `).Error
+		if err != nil {
+			logrus.Fatalf("Failed to add constraint: %v", err)
+		} else {
+			logrus.Infof("Constraint fk_teams_leader created successfully")
+		}
+	}
 	appCfg := cfg.App
 	if appCfg.OAuth.Enabled {
 		if err := DB.AutoMigrate(&UserOauthMeta{}); err != nil {

@@ -14,7 +14,7 @@ type Team struct {
 	Ban       bool   `json:"ban" gorm:"default:false"`
 	Blacklist bool   `json:"blacklist" gorm:"default:false"`
 	LeaderID  uint   `json:"leader" gorm:"not null"`
-	Leader    User   `gorm:"foreignKey:LeaderID;constraint:OnUpdate:CASCADE"`
+	Leader    User   `gorm:"-"`
 	Members   []User `gorm:"foreignKey:TeamID"`
 }
 
