@@ -41,6 +41,31 @@ func getMyProfile(ctx *gin.Context) {
 		AvatarURL: user.AvatarURL,
 		TeamID:    user.TeamID,
 	}
+	if user.TeamID != nil {
+		var solves []models.Solve
+		if err := models.DB.Where("user_id = ? AND blood_count <= 3", *user.TeamID).Find(&solves).Error; err == nil {
+			var first, second, third []uint
+			for _, s := range solves {
+				switch s.BloodCount {
+				case 1:
+					first = append(first, s.ChallengeID)
+				case 2:
+					second = append(second, s.ChallengeID)
+				case 3:
+					third = append(third, s.ChallengeID)
+				}
+			}
+			if len(first) > 0 {
+				userInfo.FirstBlood = &first
+			}
+			if len(second) > 0 {
+				userInfo.SecondBlood = &second
+			}
+			if len(third) > 0 {
+				userInfo.ThirdBlood = &third
+			}
+		}
+	}
 	auditLog.WithFields(logrus.Fields{
 		"event":    "get_my_profile",
 		"status":   "success",
@@ -102,6 +127,31 @@ func getUserProfile(ctx *gin.Context) {
 		Username:  user.Username,
 		AvatarURL: user.AvatarURL,
 		TeamID:    user.TeamID,
+	}
+	if user.TeamID != nil {
+		var solves []models.Solve
+		if err := models.DB.Where("user_id = ? AND blood_count <= 3", *user.TeamID).Find(&solves).Error; err == nil {
+			var first, second, third []uint
+			for _, s := range solves {
+				switch s.BloodCount {
+				case 1:
+					first = append(first, s.ChallengeID)
+				case 2:
+					second = append(second, s.ChallengeID)
+				case 3:
+					third = append(third, s.ChallengeID)
+				}
+			}
+			if len(first) > 0 {
+				userInfo.FirstBlood = &first
+			}
+			if len(second) > 0 {
+				userInfo.SecondBlood = &second
+			}
+			if len(third) > 0 {
+				userInfo.ThirdBlood = &third
+			}
+		}
 	}
 	auditLog.WithFields(logrus.Fields{
 		"event":    "get_user_profile",

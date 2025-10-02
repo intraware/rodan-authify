@@ -387,10 +387,30 @@ func getTeam(ctx *gin.Context) {
 }
 
 func buildTeamResponse(team models.Team) teamResponse {
-	var firstBlood []uint
-	var secondBlood []uint
-	var thirdBlood []uint
-	err := models.DB.Find("team = ? AND blood")
+	var teamObj teamResponse
+	var solves []models.Solve
+	if err := models.DB.Where("team_id = ? AND blood_count <= 3", team.ID).Find(&solves).Error; err == nil {
+		var first, second, third []uint
+		for _, s := range solves {
+			switch s.BloodCount {
+			case 1:
+				first = append(first, s.ChallengeID)
+			case 2:
+				second = append(second, s.ChallengeID)
+			case 3:
+				third = append(third, s.ChallengeID)
+			}
+		}
+		if len(first) > 0 {
+			teamObj.FirstBlood = &first
+		}
+		if len(second) > 0 {
+			teamObj.SecondBlood = &second
+		}
+		if len(third) > 0 {
+			teamObj.ThirdBlood = &third
+		}
+	}
 	members := make([]userInfo, len(team.Members))
 	for i, member := range team.Members {
 		members[i] = userInfo{
@@ -401,13 +421,12 @@ func buildTeamResponse(team models.Team) teamResponse {
 			TeamID:    member.TeamID,
 		}
 	}
-	return teamResponse{
-		ID:       team.ID,
-		Name:     team.Name,
-		Code:     team.Code,
-		LeaderID: team.LeaderID,
-		Members:  members,
-	}
+	teamObj.ID = team.ID
+	teamObj.Name = team.Name
+	teamObj.Code = team.Code
+	teamObj.LeaderID = team.LeaderID
+	teamObj.Members = members
+	return teamObj
 }
 
 func editTeam(ctx *gin.Context) {
