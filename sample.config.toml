@@ -93,3 +93,4 @@ service-url = "redis://cache-service:6379"
 service-type = "redis"
 internal-cache-size = 1000
 internal-cache-duration = "10m"
+skip-internal-cache = true

@@ -387,6 +387,10 @@ func getTeam(ctx *gin.Context) {
 }
 
 func buildTeamResponse(team models.Team) teamResponse {
+	var firstBlood []uint
+	var secondBlood []uint
+	var thirdBlood []uint
+	err := models.DB.Find("team = ? AND blood")
 	members := make([]userInfo, len(team.Members))
 	for i, member := range team.Members {
 		members[i] = userInfo{
