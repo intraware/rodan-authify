@@ -1,6 +1,8 @@
 package values
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"reflect"
@@ -57,6 +59,10 @@ func InitWithViper(path string) error {
 		}
 		cfg.App.CompiledEmail = regex
 	}
+	if cfg.App.Admin.APIKey != "" {
+		hash := sha256.Sum256([]byte(cfg.App.Admin.APIKey))
+		cfg.App.Admin.HashedAPIKey = hex.EncodeToString(hash[:])
+	}
 	if err := cfg.Validate(); err != nil {
 		return err
 	}
@@ -87,6 +93,10 @@ func InitWithViper(path string) error {
 				}
 			} else {
 				newCfg.App.CompiledEmail = oldCfg.App.CompiledEmail
+			}
+			if newCfg.App.Admin.APIKey != "" {
+				hash := sha256.Sum256([]byte(newCfg.App.Admin.APIKey))
+				newCfg.App.Admin.HashedAPIKey = hex.EncodeToString(hash[:])
 			}
 			SetConfig(&newCfg)
 			log.Println("[CONFIG] Live reload applied")

@@ -30,6 +30,16 @@ import (
 func signUp(ctx *gin.Context) {
 	appCfg := values.GetConfig().App
 	auditLog := utils.Logger.WithField("type", "audit")
+	if !shared.AllowSignup() {
+		auditLog.WithFields(logrus.Fields{
+			"event":  "sign_up",
+			"status": "failure",
+			"reason": "not_enabled",
+			"ip":     ctx.ClientIP(),
+		}).Warn("Signup disabled")
+		ctx.JSON(http.StatusForbidden, types.ErrorResponse{Error: "Signup is not allowed right now"})
+		return
+	}
 	var req signUpRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		auditLog.WithFields(logrus.Fields{
@@ -177,6 +187,16 @@ func signUp(ctx *gin.Context) {
 // @Router       /auth/login [post]
 func login(ctx *gin.Context) {
 	auditLog := utils.Logger.WithField("type", "audit")
+	if !shared.AllowLogin() {
+		auditLog.WithFields(logrus.Fields{
+			"event":  "login",
+			"status": "failure",
+			"reason": "not_enabled",
+			"ip":     ctx.ClientIP(),
+		}).Warn("Login disabled")
+		ctx.JSON(http.StatusForbidden, types.ErrorResponse{Error: "Login is not allowed right now"})
+		return
+	}
 	var req loginRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		auditLog.WithFields(logrus.Fields{

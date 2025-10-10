@@ -50,6 +50,13 @@ type AppConfig struct {
 	TOTP     TOTPConfig  `mapstructure:"totp" reload:"true"`
 	Ban      BanConfig   `mapstructure:"ban" reload:"true"`
 	AppCache CacheConfig `mapstructure:"cache"`
+	Admin    AdminConfig `mapstructure:"admin"`
+}
+
+type AdminConfig struct {
+	Endpoint     string `mapstructure:"endpoint"`
+	APIKey       string `mapstructure:"api-key"`
+	HashedAPIKey string `mapstructure:"-"`
 }
 
 type EmailConfig struct {

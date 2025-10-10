@@ -60,3 +60,8 @@ func Init(config *config.AppConfig) {
 		Prefix:        "oauth-state-cache",
 	})
 }
+
+func init() {
+	allowLogin.Store(true)
+	allowSignUp.Store(true)
+}
